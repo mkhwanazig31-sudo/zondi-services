@@ -1,0 +1,9 @@
+{
+  "name": "Zondi SOS",
+  "short_name": "Zondi",
+  "start_url": "/sos",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#ff0000",
+  "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+}
