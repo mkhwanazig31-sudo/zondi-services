@@ -1,31 +1,41 @@
 <!DOCTYPE html><html><head>
 <title>Patrollers Portal - Zondi</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body{font-family:system-ui;margin:0;background:#f8fafc}.nav{padding:12px 20px;display:flex;justify-content:space-between;background:#0f172a;color:#fff;position:sticky;top:0;z-index:10}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px}#map{height:520px;border-radius:10px}</style>
+<style>
+body{margin:0;font-family:system-ui;background:#f8fafc}
+.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#fff;position:sticky;top:0;z-index:20}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px;margin:8px}
+#map{height:72vh;border-radius:12px;min-height:400px}
+.app{max-width:100%;margin:0 auto;min-height:100vh;background:#f8fafc}
+.grid{display:grid;grid-template-columns:1fr 340px;gap:8px;padding:8px}
+@media(max-width:800px){.grid{grid-template-columns:1fr} #map{height:50vh}}
+</style>
 </head><body>
 <script>
 let auth = JSON.parse(localStorage.getItem('zondi_auth')||'null');
 if(!auth){ location.href='/login'; }
-if(auth.role!=='patroller'){ alert('You are Client - going to Clients Portal'); location.href='/clients'; }
+if(auth.role!=='patroller'){ location.href='/clients'; }
 </script>
 
+<div class="app">
 <div class="nav">
-<div><b>PATROLLERS PORTAL</b><br><span style="font-size:10px;color:#94a3b8" id="guardEmail">Guard</span></div>
-<div style="display:flex;gap:8px;align-items:center"><span style="font-size:10px;background:#16a34a;padding:3px 8px;border-radius:10px">● LIVE TRACE ALL CLIENTS</span><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:4px 10px;border-radius:20px;border:0;background:#fff">Logout</button></div>
+<div><b>🛡️ PATROLLERS PORTAL</b><br><span style="font-size:10px;color:#94a3b8" id="guardEmail">Guard</span></div>
+<div style="display:flex;gap:8px;align-items:center"><span style="font-size:10px;background:#16a34a;padding:4px 10px;border-radius:12px">● TRACE CLIENTS LIVE</span><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:0;background:#fff;color:#111">Logout</button></div>
 </div>
 
-<div style="padding:12px;max-width:1200px;margin:auto">
-<div style="display:grid;grid-template-columns:1fr 320px;gap:12px">
+<div class="grid">
 <div class="card">
-<div style="display:flex;justify-content:space-between;margin-bottom:6px"><b id="mapTitle">Trace ALL Clients - Satellite shows houses</b><select id="layerSelect" style="padding:4px 8px;border-radius:8px;font-size:12px"><option value="satellite">Satellite (see houses)</option><option value="topo">Topographic</option><option value="street">Street</option></select></div>
+<div style="display:flex;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px"><b id="mapTitle" style="font-size:13px">All Clients - Satellite shows houses clearly</b><select id="layerSelect" style="padding:6px 10px;border-radius:8px;font-size:12px;border:1px solid #ddd"><option value="satellite">Satellite (Autographic - see houses)</option><option value="topo">Topographic</option><option value="street">Street</option></select></div>
 <div id="map"></div>
+<div style="font-size:10px;color:#666;margin-top:6px">Tip: Satellite = see roofs/yards/shack number. Topo = contours. Click client to trace blue trail. Video vault saves SOS proof.</div>
 </div>
-<div style="display:flex;flex-direction:column;gap:10px">
-<div class="card"><h4 style="margin:0">🚨 Live SOS from Clients (click to trace)</h4><div id="sosFeed" style="font-size:12px;max-height:240px;overflow-y:auto;margin-top:6px">Loading...</div></div>
-<div class="card"><h4 style="margin:0">📱 All Clients Shops (Patroller sees all)</h4><div id="clientList" style="font-size:12px;margin-top:6px"></div><div id="trailBox" style="margin-top:8px;font-size:11px;background:#f8fafc;padding:6px;border-radius:8px">Select client to trace blue line</div></div>
-<div class="card"><h4 style="margin:0">🎙️ T780 PTT</h4><button id="pttBtn" style="width:100%;margin-top:8px;padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:700">🎙️ HOLD TO TALK TO ALL RADIOS</button></div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<div class="card"><h4 style="margin:0;font-size:13px">🚨 Live SOS (Clients → Patrollers)</h4><div id="sosFeed" style="font-size:12px;max-height:220px;overflow-y:auto;margin-top:6px">Loading...</div></div>
+<div class="card"><h4 style="margin:0;font-size:13px">📱 All Clients Shops - Click to TRACE</h4><div id="clientList" style="font-size:12px;margin-top:8px">Loading...</div><div id="trailBox" style="margin-top:8px;font-size:11px;background:#f8fafc;padding:8px;border-radius:8px">Select client → blue trail last 20 pings</div><div id="videoBox" style="margin-top:8px;font-size:11px;background:#fef2f2;padding:8px;border-radius:8px">Video Vault: checking...</div></div>
+<div class="card"><h4 style="margin:0;font-size:13px">🎙️ T780 PTT - Inside Portal</h4><button id="pttBtn" style="width:100%;margin-top:8px;padding:14px;background:#2563eb;color:#fff;border:0;border-radius:10px;font-weight:800">🎙️ HOLD TO TALK TO ALL RADIOS</button><div style="font-size:10px;color:#888;margin-top:6px">Transmits to T780 devices + all patrollers in portal</div></div>
 </div>
 </div>
 </div>
@@ -42,12 +52,18 @@ let markers={}; let poly=null;
 function loadSOS(){
  fetch('/api/sos-feed').then(r=>r.json()).then(list=>{
   let uniq={}; list.forEach(e=>{if(e.phoneId) uniq[e.phoneId]=e});
-  document.getElementById('sosFeed').innerHTML=list.slice(-15).reverse().map(e=>`<div onclick="traceClient('${e.phoneId}')" style="padding:6px;border-bottom:1px solid #eee;cursor:pointer"><b style="color:#e11d48">${e.type}</b> ${e.phoneId}<br><span style="color:#666">${e.time?.slice(11,19)} ${e.lat?.toFixed(4)||''}</span></div>`).join('')||'No SOS';
-  document.getElementById('clientList').innerHTML=Object.values(uniq).map(e=>`<div onclick="traceClient('${e.phoneId}')" style="padding:8px;border:1px solid #eee;border-radius:8px;margin-bottom:4px;cursor:pointer;background:${e.type.includes('SOS')?'#fef2f2':'#fff'}"><b>${e.phoneId}</b> ${e.shop}<br><span style="color:#666">${e.lat?.toFixed(5)||'no gps'}</span><br><span style="color:#2563eb;font-size:10px">▶ TRACE LIVE</span></div>`).join('')||'No clients - open /clients on another phone';
-  list.forEach(e=>{if(e.lat&&e.lng){ if(!markers[e.phoneId]) markers[e.phoneId]=L.marker([e.lat,e.lng]).addTo(map).bindPopup(e.phoneId+'<br>'+e.shop); else markers[e.phoneId].setLatLng([e.lat,e.lng]); }});
+  document.getElementById('sosFeed').innerHTML=list.slice(-20).reverse().map(e=>`<div onclick="traceClient('${e.phoneId}')" style="padding:6px;border-bottom:1px solid #eee;cursor:pointer"><b style="color:#e11d48">${e.type}</b> ${e.phoneId} ${e.shop||''}<br><span style="color:#666">${e.time?.slice(11,19)} ${e.lat?.toFixed(4)||''}</span></div>`).join('')||'No SOS yet';
+  document.getElementById('clientList').innerHTML=Object.values(uniq).map(e=>`<div onclick="traceClient('${e.phoneId}')" style="padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:6px;cursor:pointer;background:${e.type.includes('SOS')?'#fef2f2':'#fff'}"><b>${e.phoneId}</b> - ${e.shop||''}<br><span style="color:#666;font-size:11px">${e.lat?.toFixed(5)||'no gps'}, ${e.lng?.toFixed(5)||''}</span><br><span style="color:#2563eb;font-size:10px;font-weight:700">▶ TRACE THIS CLIENT PORTAL LIVE</span></div>`).join('')||'No clients - open /clients on other phone with Tracking ON';
+  list.forEach(e=>{if(e.lat&&e.lng){ if(!markers[e.phoneId]) markers[e.phoneId]=L.marker([e.lat,e.lng]).addTo(map).bindPopup(e.phoneId+'<br>'+e.shop+'<br>'+e.type); else markers[e.phoneId].setLatLng([e.lat,e.lng]); }});
  });
+ fetch('/api/videos').then(r=>r.json()).then(v=>{document.getElementById('videoBox').innerHTML = v.length? v.slice(-3).map(x=>`<div>🎥 ${x.phoneId} ${x.time?.slice(11,19)} - SOS video vault saved</div>`).join('') : 'No SOS videos yet';});
 }
-function traceClient(id){ fetch('/api/tracking/'+id).then(r=>r.json()).then(t=>{ if(poly) map.removeLayer(poly); if(t.length){ let pts=t.map(p=>[p.lat,p.lng]).filter(p=>p[0]); poly=L.polyline(pts,{color:'#2563eb',weight:4}).addTo(map); map.fitBounds(poly.getBounds()); document.getElementById('mapTitle').innerText='Tracing Client: '+id; document.getElementById('trailBox').innerHTML=t.slice(-8).reverse().map(e=>`<div>${e.time?.slice(11,19)} ${e.type}</div>`).join(''); } }); }
+function traceClient(id){
+ document.getElementById('mapTitle').innerText='Tracing Client Portal: '+id+' - last 20 points - Video vault active';
+ fetch('/api/tracking/'+id).then(r=>r.json()).then(t=>{ if(poly) map.removeLayer(poly); if(t.length){ let pts=t.map(p=>[p.lat,p.lng]).filter(p=>p[0]); poly=L.polyline(pts,{color:'#2563eb',weight:5}).addTo(map); map.fitBounds(poly.getBounds(),{padding:[30,30]}); document.getElementById('trailBox').innerHTML=t.slice(-10).reverse().map(e=>`<div>${e.time?.slice(11,19)} ${e.type} ${e.lat?.toFixed(5)}</div>`).join(''); } });
+}
 setInterval(loadSOS,4000); loadSOS();
+document.getElementById('pttBtn').onmousedown=function(){this.innerText='● TRANSMITTING TO T780 + ALL GUARDS'; this.style.background='#e11d48';};
+document.getElementById('pttBtn').onmouseup=function(){this.innerText='🎙️ HOLD TO TALK TO ALL RADIOS'; this.style.background='#2563eb';};
 </script>
 </body></html>
