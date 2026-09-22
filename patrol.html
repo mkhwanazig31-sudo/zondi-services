@@ -1,30 +1,17 @@
-<!DOCTYPE html><html><head><title>Patrollers Portal - 5min Video</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body{margin:0;font-family:system-ui;background:#f8fafc}.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#fff;position:sticky;top:0;z-index:20}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px;margin:8px}#map{height:60vh;border-radius:12px;min-height:380px}.grid{display:grid;grid-template-columns:1fr 380px;gap:8px;padding:8px}@media(max-width:800px){.grid{grid-template-columns:1fr}#map{height:48vh}}.pin-btn{padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;text-align:left}.pin-btn.active{border:2px solid #111}.wa-btn{background:#25D366;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:700;font-size:12px;width:100%;margin-top:6px}</style></head><body>
-<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth) location.href='/login';</script>
-<div class="nav"><div><b>🛡️ PATROLLERS - 5MIN VIDEO</b><br><span style="font-size:10px;color:#94a3b8" id="guardEmail"></span></div><div style="display:flex;gap:8px"><span style="font-size:10px;background:#25D366;padding:4px 10px;border-radius:12px">● 5MIN REC LIVE</span><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:0;background:#fff">Logout</button></div></div>
-<div class="grid"><div class="card"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px"><b id="mapTitle" style="font-size:13px">Tap 📍 pin - See 5min video</b><div style="display:flex;gap:4px"><select id="layerSelect" style="padding:6px;border-radius:8px;font-size:11px"><option value="google">Google HD - CLEAR</option><option value="esri">Esri</option><option value="street">Street</option></select><button onclick="map.setZoom(20)" style="padding:6px 8px;border-radius:6px;background:#111;color:#fff;font-size:10px">20</button><button onclick="map.setZoom(21)" style="padding:6px 8px;border-radius:6px;background:#2563eb;color:#fff;font-size:10px">21</button></div></div><div id="map"></div></div>
-<div style="display:flex;flex-direction:column;gap:8px"><div class="card" style="border:2px solid #2563eb"><h4 style="margin:0;font-size:13px">🎥 T780 - 5 MIN Videos Live</h4><div style="font-size:10px;color:#666">Newest first - tap to track + WhatsApp</div><div id="videoFeed" style="margin-top:8px;max-height:520px;overflow-y:auto"></div></div><div class="card"><h4 style="margin:0;font-size:13px">📍 Client Pins - Tap</h4><div id="clientList" style="max-height:280px;overflow-y:auto"></div><div id="trailBox" style="margin-top:8px;font-size:11px;background:#f8fafc;padding:8px;border-radius:8px">Select pin</div></div><div class="card"><h4 style="margin:0;font-size:12px">🚨 SOS</h4><div id="sosFeed" style="font-size:11px;max-height:150px;overflow-y:auto"></div></div></div></div>
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{margin:0;font-family:system-ui;background:#fff}#map{height:60vh;width:100%}</style>
+</head><body>
+<div id="map"></div>
+<div id="list" style="padding:12px"></div>
 <script>
-document.getElementById('guardEmail').innerText=auth.email;
-let map = L.map('map',{maxZoom:22}).setView([-25.585,28.03],16);
-let google = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{maxZoom:22,maxNativeZoom:20}).addTo(map);
-let esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22,maxNativeZoom:19});
-let street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19});
-let cur=google; document.getElementById('layerSelect').onchange=e=>{map.removeLayer(cur); cur=e.target.value=='google'?google.addTo(map):e.target.value=='esri'?esri.addTo(map):street.addTo(map);};
-let markers={}, poly=null, activeId=null;
-function pinIcon(txt){return L.divIcon({html:`<div style="background:#111;color:#fff;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap">📍 ${txt.slice(0,24)}</div>`,className:'',iconAnchor:[20,20]})}
-function shareWA(lat,lng,addr,name,hasVideo){ let gmaps=`https://www.google.com/maps?q=${lat},${lng}`; let msg=`🚨 ZONDI PATROL\n📍 ${name} - ${addr}\n🎥 5MIN VIDEO attached in portal\n🗺️ ${gmaps}\n⏰ ${new Date().toLocaleString()}`; window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');}
-function loadAll(){
- fetch('/api/sos-feed').then(r=>r.json()).then(list=>{fetch('/api/users').then(r=>r.json()).then(users=>{
-  let uniq={}; list.forEach(e=>{if(e.phoneId) uniq[e.phoneId]=e});
-  Object.values(uniq).forEach(u=>{let f=users.find(x=>x.email==u.email); if(f){u.address=f.address||u.address; u.shopName=f.shop||u.shop; u.clientName=f.name||u.clientName;}});
-  document.getElementById('clientList').innerHTML=Object.values(uniq).map(e=>`<div class="pin-btn ${activeId==e.phoneId?'active':''}" onclick="flyToClient('${e.phoneId}')"><div style="font-weight:800">📍 ${e.clientName||''} - ${e.address||''}</div><div style="font-size:11px;color:#666">${e.shopName||''}</div><button class="wa-btn" onclick="event.stopPropagation(); shareWA(${e.lat},${e.lng},'${(e.address||'').replace(/'/g,"")}','${(e.clientName||'').replace(/'/g,"")}')">📲 WhatsApp Location</button></div>`).join('')||'No clients';
-  Object.values(uniq).forEach(e=>{if(e.lat&&e.lng){let label=`${e.clientName||''} - ${e.address||''}`; if(!markers[e.phoneId]){markers[e.phoneId]=L.marker([e.lat,e.lng],{icon:pinIcon(label)}).addTo(map); markers[e.phoneId].on('click',()=>flyToClient(e.phoneId));} else markers[e.phoneId].setLatLng([e.lat,e.lng]);}});
-  document.getElementById('sosFeed').innerHTML=list.slice(-12).reverse().map(e=>`<div onclick="flyToClient('${e.phoneId}')" style="padding:6px;border-bottom:1px solid #eee;cursor:pointer"><b>${e.type}</b> 📍${e.address||''}<br><span style="font-size:10px">${e.time?.slice(11,19)}</span></div>`).join('');
- });});
+let map=L.map('map').setView([-25.6,27.98],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+async function load(){let r=await fetch('/api/sos-feed');let d=await r.json();
+ document.getElementById('list').innerHTML=d.map(x=>`<div>${x.name} - ${x.lat},${x.lng} - ${x.sos?'🚨SOS':''} ${x.time}</div>`).join('')||'No clients yet';
+ d.forEach(x=>{if(x.lat) L.marker([x.lat,x.lng]).addTo(map).bindPopup(x.name)});
 }
-function flyToClient(id){ activeId=id; fetch('/api/tracking/'+id).then(r=>r.json()).then(t=>{ if(poly) map.removeLayer(poly); if(t.length){ let last=t[t.length-1]; map.flyTo([last.lat,last.lng],20,{duration:1}); poly=L.polyline(t.map(p=>[p.lat,p.lng]).filter(p=>p[0]),{color:'#2563eb',weight:5}).addTo(map); document.getElementById('trailBox').innerHTML=`<b>📍 ${last.clientName||''} - ${last.address||''}</b><br><a href="https://www.google.com/maps?q=${last.lat},${last.lng}" target="_blank" style="color:#2563eb;font-weight:700">Google Maps HD</a> - <button onclick="shareWA(${last.lat},${last.lng},'${(last.address||'').replace(/'/g,"")}','${(last.clientName||'').replace(/'/g,"")}')" style="border:0;background:#25D366;color:#fff;padding:4px 8px;border-radius:6px">WhatsApp</button>`;} loadAll(); });}
-function loadVideos(){ fetch('/api/videos').then(r=>r.json()).then(vids=>{ document.getElementById('videoFeed').innerHTML=vids.reverse().slice(0,20).map(v=>`<div style="border:1px solid #eee;border-radius:12px;padding:8px;margin-bottom:10px"><video src="/uploads/${v.file}" controls style="width:100%;border-radius:8px;max-height:220px"></video><div style="font-size:12px;font-weight:800;margin-top:4px">📍 ${v.name||''} - ${v.address||''}</div><div style="font-size:10px;color:#666">${v.shop||''} • ${v.time?.slice(0,16).replace('T',' ')} • ${v.phoneId}</div><div style="display:flex;gap:6px;margin-top:6px"><button onclick="flyToClient('${v.phoneId}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:11px">🗺️ Track Pin</button><button onclick="shareWA(${v.lat||-25.58},${v.lng||28.0},'${(v.address||'').replace(/'/g,"")}','${(v.name||'').replace(/'/g,"")}',true)" style="flex:1;padding:8px;border-radius:8px;border:0;background:#25D366;color:#fff;font-size:11px;font-weight:800">📲 WhatsApp Video + Loc</button></div></div>`).join('')||'No 5min videos yet'; });}
-setInterval(()=>{loadAll(); loadVideos();},5000); loadAll(); loadVideos();
-</script>
-</body></html>
+load(); setInterval(load,5000);
+</script></body></html>
