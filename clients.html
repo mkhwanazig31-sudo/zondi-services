@@ -1,26 +1,68 @@
-// Use HIGH accuracy + allow drag correction
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{margin:0;font-family:system-ui}#map{height:70vh;width:100%} .top{padding:12px}</style>
+</head>
+<body>
+<div class="top">
+<h3 style="margin:0">ZONDI - Pin your EXACT gate</h3>
+<p style="font-size:12px;color:#666">Blue arrow = you. Grey pin = old. Drag RED pin to correct house if 90% wrong, then press SAVE.</p>
+<button onclick="saveFix()" style="background:#111;color:#fff;padding:12px 20px;border-radius:10px;border:0;width:100%">SAVE MY CORRECT HOUSE</button>
+<p id="status" style="font-size:12px;color:green"></p>
+</div>
+<div id="map"></div>
+<script>
+let map = L.map('map').setView([-25.6, 28.0], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 let savedPin = null;
+let currentPos = null;
 
-function initMap() {
+function initMap(){
   navigator.geolocation.getCurrentPosition(pos => {
-    let lat = pos.coords.latitude;
-    let lng = pos.coords.longitude;
-    // Check if user already corrected pin
+    currentPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
     let corrected = JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
-    if(corrected){ lat = corrected.lat; lng = corrected.lng; }
-    
+    let lat = corrected ? corrected.lat : pos.coords.latitude;
+    let lng = corrected ? corrected.lng : pos.coords.longitude;
+
     map.setView([lat,lng], 19);
     
-    // Draggable marker - client can drag to correct house
+    if(savedPin) map.removeLayer(savedPin);
     savedPin = L.marker([lat,lng], {draggable:true}).addTo(map)
-      .bindPopup("Drag me to your EXACT gate - then Save")
-      .openPopup();
+      .bindPopup("DRAG ME to your exact gate").openPopup();
       
     savedPin.on('dragend', e => {
       let p = e.target.getLatLng();
-      localStorage.setItem('zondi_corrected_pin', JSON.stringify({lat:p.lat, lng:p.lng}));
-      localStorage.setItem('zondi_address', p.lat+','+p.lng); // save exact, not street name
-      fetch('/api/sos', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email: localStorage.getItem('zondi_email'), lat:p.lat, lng:p.lng, corrected:true })})
+      currentPos = {lat:p.lat, lng:p.lng};
+      document.getElementById('status').innerText = "New position: " + p.lat.toFixed(6) + ", " + p.lng.toFixed(6) + " - Now press SAVE";
     });
-  }, null, {enableHighAccuracy:true, maximumAge:0, timeout:10000});
+    
+    // Blue dot = you
+    L.circleMarker([pos.coords.latitude, pos.coords.longitude], {radius:8, color:'blue'}).addTo(map).bindPopup("You are here (phone GPS)");
+    
+  }, err=>{ alert("Enable GPS"); }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
 }
+
+function saveFix(){
+  if(!currentPos){ alert("Wait for GPS"); return; }
+  localStorage.setItem('zondi_corrected_pin', JSON.stringify(currentPos));
+  fetch('/api/sos', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      email: JSON.parse(localStorage.getItem('zondi_auth')||'{}').email || 'client',
+      lat: currentPos.lat,
+      lng: currentPos.lng,
+      address: currentPos.lat + ',' + currentPos.lng,
+      corrected: true,
+      time: new Date().toISOString()
+    })
+  }).then(()=>{ document.getElementById('status').innerText = "✅ SAVED! Now SOS will go to correct house, not 4408 wrong house"; });
+}
+
+initMap();
+</script>
+</body>
+</html>
