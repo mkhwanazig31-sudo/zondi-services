@@ -2,110 +2,48 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<title>ZONDI - Pin Your Gate</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system;background:#fff;color:#111}
-.top{padding:14px 16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;z-index:10}
-#map{height:68vh;width:100%;background:#f2f2f2}
-/* CRITICAL FIX - REMOVE KAWTAR GLITCH FROM MAP */
-.leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow{
-  filter:none !important;
-  mix-blend-mode:normal !important;
-  transform:none !important;
-}
-.leaflet-layer{filter:none !important}
-button.save{width:100%;background:#111;color:#fff;padding:14px;border:0;border-radius:12px;font-weight:800;font-size:15px;margin-top:10px}
-#status{font-size:12px;margin-top:8px;color:#16a34a;min-height:16px}
-.badge{font-size:10px;background:#f0fdf4;color:#16a34a;padding:4px 8px;border-radius:20px;border:1px solid #dcfce7}
+html,body{margin:0;padding:0;background:#fff;font-family:system-ui}
+#map{height:75vh;width:100%;background:#eee;display:block}
+.leaflet-tile-pane{filter:none!important}
+.leaflet-tile{filter:none!important;mix-blend-mode:normal!important}
 </style>
 </head>
-<body>
-<div class="top">
-<div style="display:flex;justify-content:space-between;align-items:center">
-<h3 style="margin:0;font-size:16px">ZONDI - Pin your EXACT gate <span class="badge">NO GLITCH v2.1</span></h3>
-<a href="/" style="font-size:12px;text-decoration:none;color:#666">Home</a>
+<body style="background:#fff">
+<div style="padding:12px;background:#fff;border-bottom:1px solid #eee">
+<b>ZONDI - Client</b> <span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:3px 8px;border-radius:10px">CLEAN v2.2</span>
+<p style="font-size:11px;color:#666;margin:4px 0">Drag red pin to exact gate if 4408 wrong → SAVE</p>
+<button onclick="saveFix()" style="width:100%;padding:14px;background:#111;color:#fff;border:0;border-radius:12px;font-weight:700">SAVE MY CORRECT HOUSE</button>
+<div id="status" style="font-size:12px;color:green;margin-top:6px"></div>
 </div>
-<p style="font-size:12px;color:#666;margin:6px 0 0 0">Blue dot = you. Drag RED pin if it's on wrong house (4408 bug). Then SAVE.</p>
-<button class="save" onclick="saveFix()">SAVE MY CORRECT HOUSE</button>
-<div id="status"></div>
-</div>
-
 <div id="map"></div>
-
 <script>
-let map = L.map('map', {zoomControl:false}).setView([-25.60855,27.98021], 17);
-L.control.zoom({position:'topleft'}).addTo(map);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  maxZoom:21,
-  attribution:''
-}).addTo(map);
-
-let savedPin = null;
-let currentPos = null;
-let myDot = null;
-
-function initMap(){
-  navigator.geolocation.getCurrentPosition(pos => {
-    let gps = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-    let corrected = JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
-    let lat = corrected ? corrected.lat : gps.lat;
-    let lng = corrected ? corrected.lng : gps.lng;
-    currentPos = {lat:lat, lng:lng};
-
-    map.setView([lat,lng], 19);
-
-    if(savedPin) map.removeLayer(savedPin);
-    savedPin = L.marker([lat,lng], {draggable:true}).addTo(map);
-    savedPin.bindPopup("DRAG ME to your exact gate, then press SAVE").openPopup();
-    
-    savedPin.on('dragend', e => {
-      let p = e.target.getLatLng();
-      currentPos = {lat:p.lat, lng:p.lng};
-      document.getElementById('status').innerHTML = "📍 New: " + p.lat.toFixed(6) + ", " + p.lng.toFixed(6) + " - Press SAVE";
-    });
-
-    if(myDot) map.removeLayer(myDot);
-    myDot = L.circleMarker([gps.lat, gps.lng], {radius:7, color:'#2563eb', fillColor:'#2563eb', fillOpacity:1, weight:2}).addTo(map).bindPopup("Your phone GPS");
-
-  }, err=>{
-    document.getElementById('status').innerHTML = "Enable GPS Location";
-    map.setView([-25.60855,27.98021], 17);
-  }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
+var map = L.map('map').setView([-25.60855,27.98021],18);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(map);
+var pin=null, pos=null;
+function init(){
+ navigator.geolocation.getCurrentPosition(p=>{
+  var lat = p.coords.latitude, lng = p.coords.longitude;
+  var fix = JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
+  if(fix){lat=fix.lat;lng=fix.lng}
+  pos={lat:lat,lng:lng};
+  map.setView([lat,lng],19);
+  if(pin) map.removeLayer(pin);
+  pin=L.marker([lat,lng],{draggable:true}).addTo(map).bindPopup("Drag me").openPopup();
+  pin.on('dragend',e=>{var ll=e.target.getLatLng();pos={lat:ll.lat,lng:ll.lng};document.getElementById('status').innerText="New: "+ll.lat.toFixed(6)+" - Press SAVE"});
+ },null,{enableHighAccuracy:true});
 }
-
 function saveFix(){
-  if(!currentPos){ alert("Wait for GPS"); return; }
-  localStorage.setItem('zondi_corrected_pin', JSON.stringify(currentPos));
-  localStorage.setItem('zondi_address', currentPos.lat + ',' + currentPos.lng);
-  document.getElementById('status').innerText = "Saving...";
-
-  let auth = JSON.parse(localStorage.getItem('zondi_auth')||'{}');
-  fetch('/api/sos', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      email: auth.email || 'client',
-      lat: currentPos.lat,
-      lng: currentPos.lng,
-      address: currentPos.lat + ',' + currentPos.lng,
-      shopName: localStorage.getItem('zondi_shopname') || '',
-      corrected: true,
-      fixedHouse: true
-    })
-  }).then(r=>r.json()).then(()=>{
-    document.getElementById('status').innerHTML = "✅ SAVED! SOS will now go to CORRECT house, not wrong 4408. You can close.";
-  }).catch(()=>{
-    document.getElementById('status').innerHTML = "✅ SAVED locally (offline). Will sync when online.";
-  });
+ if(!pos) return alert("Wait GPS");
+ localStorage.setItem('zondi_corrected_pin',JSON.stringify(pos));
+ var auth=JSON.parse(localStorage.getItem('zondi_auth')||'{}');
+ fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:auth.email||'client',lat:pos.lat,lng:pos.lng,address:pos.lat+','+pos.lng,corrected:true})})
+ .then(()=>{document.getElementById('status').innerText="✅ SAVED! No more wrong house"});
 }
-
-initMap();
-// Refresh GPS every 10 sec to keep 100% accurate
-setInterval(initMap, 10000);
+init();
 </script>
 </body>
 </html>
