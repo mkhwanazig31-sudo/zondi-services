@@ -1,9 +1,9 @@
 {
-  "name": "Zondi SOS",
+  "name": "Zondi Security",
   "short_name": "Zondi",
-  "start_url": "/sos",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#ff0000",
-  "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
+  "icons": [{"src":"https://cdn-icons-png.flaticon.com/512/2091/2091665.png","sizes":"512x512","type":"image/png"}]
 }
