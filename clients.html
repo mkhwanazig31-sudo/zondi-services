@@ -1,42 +1,46 @@
-<!DOCTYPE html><html><head><title>Clients Portal</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body{margin:0;font-family:system-ui;background:#fff}.app{max-width:420px;margin:0 auto;min-height:100vh;background:#f8fafc;box-shadow:0 0 0 1px #eee;display:flex;flex-direction:column}.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#fff;border-bottom:1px solid #eee;position:sticky;top:0;z-index:10}.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:10px 12px}#map{height:360px;border-radius:12px}</style></head><body>
-<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth){location.href='/login'} if(auth.role!=='client'){location.href='/patrollers'}</script>
+<!DOCTYPE html><html><head><title>Clients Portal</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0;font-family:system-ui;background:#f8fafc}.app{max-width:420px;margin:0 auto;min-height:100vh;background:#fff;display:flex;flex-direction:column}.nav{padding:16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee}.card{margin:12px;padding:16px;border-radius:20px;background:#fff;border:1px solid #e5e7eb}.safe{background:linear-gradient(#fff,#f0fdf4);text-align:center}.emergency{border:2px solid #111;text-align:center;padding:20px}.btn{width:100%;padding:18px;border-radius:999px;border:0;font-weight:900;font-size:18px;background:#111;color:#fff;margin-top:10px}.status{font-size:12px;padding:10px;background:#f8fafc;border-radius:10px;margin-top:10px}</style></head><body>
+<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth) location.href='/login'</script>
 <div class="app">
-<div class="nav"><div><b style="color:#2563eb">CLIENTS PORTAL</b><br><span style="font-size:10px;color:#888" id="userEmail"></span><br><span style="font-size:11px" id="myPin"></span></div><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid #ddd;background:#fff">Logout</button></div>
-<div class="card" style="text-align:center;background:linear-gradient(#fff,#f0fdf4)"><div style="font-size:32px;font-weight:900;color:#16a34a">92% SAFE</div><div style="font-size:13px" id="shopInfo"></div><div style="font-size:11px;color:#666">ID: <span id="myId"></span> • <span id="lastLoc">waiting GPS...</span></div>
-<button onclick="startGPS()" style="margin-top:8px;width:100%;padding:8px;border-radius:10px;border:1px solid #111;background:#fff;font-size:12px">🔄 Retry GPS</button></div>
-<div class="card" style="text-align:center;border:2px solid #111"><b>EMERGENCY</b><button id="sosBtn" style="width:100%;padding:18px;background:#111;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP</button><div style="font-size:10px;color:#666;margin-top:6px" id="addrShow"></div></div>
-<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="font-size:12px">My 📍 Pin - Guards see this</b><div style="display:flex;gap:4px"><button onclick="map.setZoom(19)" style="padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff;font-size:10px">19</button><button onclick="map.setZoom(20)" style="padding:4px 8px;border-radius:6px;border:0;background:#111;color:#fff;font-size:10px">20 Roof</button><button onclick="map.setZoom(21)" style="padding:4px 8px;border-radius:6px;border:1px solid #2563eb;background:#ede9fe;font-size:10px">21 SUPER</button></div></div><div id="map"></div></div>
-<div style="margin-top:auto;padding:12px;display:flex;gap:8px;background:#fff;border-top:1px solid #eee"><a href="/" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:11px">Home</a><a href="/shop" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:11px">Shop</a><a href="/sos" style="flex:1;text-align:center;text-decoration:none;color:#e11d48;font-size:11px;font-weight:700">SOS</a></div>
+<div class="nav"><div><b style="color:#2563eb;font-size:18px">CLIENTS PORTAL</b><br><span id="uEmail" style="font-size:11px;color:#888"></span><br><span id="uPin" style="font-size:12px;font-weight:700"></span></div><button onclick="localStorage.clear();location.href='/login'" style="padding:8px 14px;border-radius:20px;border:1px solid #ddd;background:#fff;font-size:11px">Logout</button></div>
+
+<div class="card safe"><div style="font-size:42px;font-weight:900;color:#16a34a">92% SAFE</div><div id="shopInfo" style="font-size:13px;margin-top:4px"></div><div style="font-size:11px;color:#16a34a;margin-top:6px" id="locStatus">⌛ Getting GPS...</div><div style="font-size:11px;color:#666;margin-top:2px">ID: <span id="myId"></span></div>
+<button onclick="startGPS()" style="margin-top:12px;width:100%;padding:10px;border-radius:12px;border:1px solid #111;background:#fff;font-size:13px;font-weight:700">🔄 Retry GPS - Resend to Patrollers</button>
+<div id="liveConfirm" class="status">📍 Location will be sent automatically every 10 sec to guards - no map needed</div>
+</div>
+
+<div class="card emergency"><b>EMERGENCY</b><button id="sosBtn" class="btn">HOLD 1.5s FOR HELP</button><div id="addrShow" style="font-size:11px;color:#666;margin-top:8px"></div><div id="sosConfirm" style="font-size:12px;color:#16a34a;margin-top:6px;display:none">✅ SOS SENT with pin to patrollers</div></div>
+
+<div class="card" style="background:#f8fafc"><b style="font-size:12px">🔒 How it works</b><div style="font-size:11px;color:#666;margin-top:6px;line-height:1.5">• Your location is sent silently to patrollers<br>• No map needed - saves data & battery<br>• Patrollers see your 📍 pin with blue dot<br>• Just keep GPS on and stay safe</div></div>
+
+<div style="margin-top:auto;padding:12px;display:flex;gap:8px;border-top:1px solid #eee;background:#fff"><a href="/" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:12px">Home</a><a href="/shop" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:12px">Shop</a><a href="/sos" style="flex:1;text-align:center;text-decoration:none;color:#e11d48;font-weight:700;font-size:12px">SOS</a></div>
 </div>
 <script>
-let myAddr = localStorage.getItem('zondi_address')||auth.address||'No address set';
-let myShop = localStorage.getItem('zondi_shopname')||'Shop';
-document.getElementById('userEmail').innerText = auth.email;
-document.getElementById('myPin').innerHTML = `📍 ${auth.name||'Gontse'} - ${myAddr}`;
-document.getElementById('shopInfo').innerText = `${myShop} - ${myAddr}`;
-document.getElementById('addrShow').innerText = `📍 ${myAddr} - this address sent to patrollers`;
+let myAddr = localStorage.getItem('zondi_address')|| '555unit4';
+let myShop = localStorage.getItem('zondi_shopname')|| 'My Shop';
+let myName = JSON.parse(localStorage.getItem('zondi_auth')).name || 'Gontse';
+let email = JSON.parse(localStorage.getItem('zondi_auth')).email;
+document.getElementById('uEmail').innerText=email;
+document.getElementById('uPin').innerHTML=`📍 ${myName} - ${myAddr}`;
+document.getElementById('shopInfo').innerText=`${myShop} - ${myAddr}`;
+document.getElementById('addrShow').innerText=`📍 ${myAddr} - this address sent to patrollers`;
 let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).slice(2,6);
-localStorage.setItem('zondi_id', phoneId);
-document.getElementById('myId').innerText = phoneId;
-let map = L.map('map',{maxZoom:22}).setView([-25.5851,28.0],18);
-let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19}).addTo(map);
-let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22,maxNativeZoom:19});
-let topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:17});
-let meMarker=null;
-let statusEl=document.getElementById('lastLoc');
+localStorage.setItem('zondi_id',phoneId);
+document.getElementById('myId').innerText=phoneId;
+let statusEl=document.getElementById('locStatus');
+let confirmEl=document.getElementById('liveConfirm');
 function showGPS(lat,lng,acc){
-  statusEl.innerHTML=lat.toFixed(5)+','+lng.toFixed(5)+' • '+Math.round(acc)+'m';
-  statusEl.style.color='#16a34a';
-  if(!meMarker){ meMarker=L.marker([lat,lng]).addTo(map).bindPopup(`📍 ${auth.name||''}<br>${myShop}<br>${myAddr}<br>${lat.toFixed(5)},${lng.toFixed(5)}`); map.setView([lat,lng],20); }
-  else meMarker.setLatLng([lat,lng]);
-  fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:lat,lng:lng,type:'CLIENT_PING',email:auth.email})});
+ statusEl.innerHTML=`✅ Live ${lat.toFixed(5)}, ${lng.toFixed(5)} • ${Math.round(acc)}m - sent to patrollers`;
+ statusEl.style.color='#16a34a';
+ confirmEl.innerHTML=`📡 Last sent ${new Date().toLocaleTimeString()} - Patrollers see your blue dot at ${myAddr}`;
+ fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:myName,lat:lat,lng:lng,type:'CLIENT_PING',email:email,acc:acc})});
 }
-function gpsError(err){ statusEl.innerHTML = err.code==1?'❌ BLOCKED - Tap 🔒 → Allow location':'📡 No signal - go outside'; statusEl.style.color='#e11d48';}
-function startGPS(){ statusEl.innerHTML='⌛ Asking location...'; if(!navigator.geolocation){statusEl.innerHTML='No GPS'; return;} navigator.geolocation.getCurrentPosition(p=>{showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy); navigator.geolocation.watchPosition(p=>showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy),gpsError,{enableHighAccuracy:true,maximumAge:0,timeout:15000});},gpsError,{enableHighAccuracy:true,timeout:15000});}
+function gpsError(e){ statusEl.innerHTML=e.code==1?'❌ Location blocked - Tap 🔒 icon in address bar → Allow':'📡 No signal - go near window'; statusEl.style.color='#e11d48'; }
+function startGPS(){ statusEl.innerHTML='⌛ Getting GPS...'; navigator.geolocation.getCurrentPosition(p=>{showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy); setInterval(()=>{navigator.geolocation.getCurrentPosition(pos=>showGPS(pos.coords.latitude,pos.coords.longitude,pos.coords.accuracy))},10000);},gpsError,{enableHighAccuracy:true,timeout:15000}); }
 startGPS();
-let hold; let btn=document.getElementById('sosBtn');
-btn.addEventListener('touchstart',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',email:auth.email})}).then(()=>{btn.innerText='SOS SENT + 📍 '+myAddr; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('touchend',()=>clearTimeout(hold));
-btn.addEventListener('mousedown',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',email:auth.email})}).then(()=>{btn.innerText='SOS SENT + 📍 '+myAddr; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('mouseup',()=>clearTimeout(hold));
+let hold, btn=document.getElementById('sosBtn');
+let sendSOS=()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:myName,lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',email:email})}).then(()=>{btn.innerText='SOS SENT ✅'; btn.style.background='#16a34a'; document.getElementById('sosConfirm').style.display='block'; setTimeout(()=>{btn.innerText='HOLD 1.5s FOR HELP'; btn.style.background='#111';},3000);})})};
+btn.addEventListener('touchstart',()=>{hold=setTimeout(sendSOS,1500)}); btn.addEventListener('touchend',()=>clearTimeout(hold));
+btn.addEventListener('mousedown',()=>{hold=setTimeout(sendSOS,1500)}); btn.addEventListener('mouseup',()=>clearTimeout(hold));
 </script>
 </body></html>
