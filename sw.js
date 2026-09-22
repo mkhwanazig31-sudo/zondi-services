@@ -1,5 +1,2 @@
-self.addEventListener('install', e=>self.skipWaiting())
-// Background sync - when internet comes back, send queued locations
-self.addEventListener('sync', e=>{
-  if(e.tag==='zondi-track') e.waitUntil(fetch('/api/sos/queue').then(r=>r.json()).then(q=>{/* send queued */}))
-})
+self.addEventListener('install', e=>{e.waitUntil(caches.open('zondi-v1').then(c=>c.addAll(['/','/shop','/login','/clients','/patrollers','/sos'])));});
+self.addEventListener('fetch', e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});
