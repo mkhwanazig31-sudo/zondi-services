@@ -1,90 +1,94 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zondi - My Shop Safe?</title>
-<style>
-  *{font-family:system-ui;margin:0;box-sizing:border-box}
-  body{background:#f5f5f5;padding:12px}
-  .card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px #0001}
-  .score{font-size:42px;font-weight:900}
-  .safe{color:#0a0}.warn{color:#e67e00}.danger{color:#d00}
-  .btn{border:0;border-radius:12px;padding:14px;width:100%;font-size:16px;font-weight:700}
-  .btn-red{background:#111;color:#fff}
-  .btn-ghost{background:#000;color:#fff}
-  #map{height:180px;background:#ddd;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#666}
-  .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
-</style>
-</head>
-<body>
+<!DOCTYPE html><html><head>
+<title>Zondi Client - 92% SAFE</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{font-family:system-ui;margin:0;background:#f3f4f6} .card{background:#fff;margin:12px;border-radius:16px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.1)} #map{height:380px;border-radius:12px} .leaflet-control{font-size:11px}</style>
+</head><body>
 
-<!-- SAFETY SCORE HERO -->
 <div class="card" style="text-align:center">
-  <div class="score safe" id="score">92% SAFE</div>
-  <div id="scoreText">Shop 4B Armed • 3 guards near</div>
-  <div style="margin-top:8px;font-size:13px;color:#666">Tracking: <span id="trackStatus">🟢 ON - ping 2min</span></div>
+<div style="font-size:36px;font-weight:900;color:#16a34a">92% SAFE</div>
+<div>Shop 4B Armed • <span id="guardTxt">3 guards near</span></div>
+<div style="font-size:12px;color:#666">Tracking: 🟢 ON - ping 2min • ID: <span id="myId"></span></div>
 </div>
 
-<!-- CLIENT SOS - SAME BUTTON AS /sos BUT INSIDE DASHBOARD -->
-<div class="card" style="text-align:center;border:2px solid #000">
-  <p style="font-weight:800">EMERGENCY?</p>
-  <button class="btn btn-ghost" id="clientSOS" style="height:90px;border-radius:50px;margin-top:8px">
-    HOLD 1.5s FOR HELP<br><small style="font-weight:400">Silent + Tracking</small>
-  </button>
-  <p style="font-size:12px;color:#666;margin-top:6px">No siren - we track phone if taken</p>
-</div>
-
-<!-- SHOP STATUS -->
 <div class="card">
-  <div class="row"><span>🔒 Shop Armed</span><span id="armed">19:02 Today <b>ON</b></span></div>
-  <div class="row"><span>👮 Nearest Guard</span><span id="guard">Sipho 120m • 2m ago</span></div>
-  <div class="row"><span>📍 Last Location</span><span id="lastLoc">Shop 4B - now</span></div>
-  <button class="btn" style="background:#eef;margin-top:8px" onclick="toggleArm()">Arm / Disarm Shop</button>
+<div style="font-weight:700;text-align:center">EMERGENCY?</div>
+<button id="sosBtn" style="width:100%;padding:20px;background:#000;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP<br><span style="font-size:12px;font-weight:400">Silent + Tracking</span></button>
+<div style="font-size:11px;color:#666;text-align:center;margin-top:6px">No siren - we track phone if taken</div>
 </div>
 
-<!-- LIVE MAP MINI -->
 <div class="card">
-  <div id="map">MAP: Shop 📍 + 3 guards moving<br><small>(Plug Google Maps here - lat/lng from /api/sos)</small></div>
-  <div style="display:flex;gap:8px;margin-top:8px">
-    <button class="btn" style="background:#fff;border:1px solid #ccc;flex:1">Call Guard</button>
-    <button class="btn" style="background:#fff;border:1px solid #ccc;flex:1" onclick="location.href='/sos'">Open /sos</button>
-  </div>
+<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-bottom:1px solid #eee"><span>🔒 Shop Armed</span><span id="armedTime">ON</span></div>
+<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-bottom:1px solid #eee"><span>👮 Nearest Guard</span><span id="nearest">Sipho 120m • 2m ago</span></div>
+<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0"><span>📍 Last Location</span><span id="lastLoc">waiting GPS</span></div>
+<button onclick="toggleArm()" style="width:100%;margin-top:8px;background:#ede9fe;border:0;padding:10px;border-radius:12px;font-weight:700">Arm / Disarm Shop</button>
 </div>
 
-<!-- ALWAYS-ON TOGGLE -->
 <div class="card">
-  <div class="row"><span>🛰️ Always-on tracking</span><label><input type="checkbox" id="trackToggle" checked onchange="toggleTrack()"> ON</label></div>
-  <p style="font-size:12px;color:#666">Uses ~50MB/day. Keeps trail even if you don't press SOS. Turn on for safety.</p>
-  <p style="font-size:11px;color:#999;margin-top:4px">If phone off/erased, we keep last 20 points. Hide T780 device for backup tracker.</p>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<b>MAP: Shop 📍 + 3 guards</b>
+<select id="layerSelect" style="padding:4px 8px;border-radius:8px;border:1px solid #ddd;font-size:12px"><option value="street">Street</option><option value="satellite">Satellite (Houses)</option><option value="topo">Topographic</option></select>
+</div>
+<div id="map"></div>
+<div style="font-size:11px;color:#666;margin-top:6px">Topo = contours / Satellite = see roofs clearly. Patrollers trace you live from /patrollers</div>
+<div style="display:flex;gap:8px;margin-top:10px">
+<button onclick="window.location.href='tel:10111'" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:12px;background:#fff">Call Guard</button>
+<button onclick="window.location.href='/sos'" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:12px;background:#fff">Open /sos</button>
+</div>
+</div>
+
+<div class="card">
+<div style="display:flex;justify-content:space-between"><b>🛰️ Always-on tracking</b><span><input type="checkbox" id="trackToggle" checked> ON</span></div>
+<div style="font-size:11px;color:#666">Uses ~50MB/day. Keeps trail even if you don't press SOS. If phone off/erased, we keep last 20 points. Hide T780 device for backup tracker.</div>
 </div>
 
 <script>
-// Reuse phoneId from sos.html
-let phoneId = localStorage.getItem('zondi_id')
-document.getElementById('lastLoc').innerText = phoneId + ' - tracking'
+let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).slice(2,8);
+localStorage.setItem('zondi_id', phoneId);
+document.getElementById('myId').innerText = phoneId;
 
-function toggleArm(){
-  const armed = document.getElementById('armed')
-  armed.innerHTML = armed.innerText.includes('ON') ? '19:45 <b>OFF</b>' : new Date().toLocaleTimeString().slice(0,5)+' <b>ON</b>'
-  // POST to /api/shop/arm
+// MAP LAYERS - TOPO + SATELLITE
+let map = L.map('map').setView([-25.6242, 28.0038], 17);
+let street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+let satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri Satellite'});
+let topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{attribution:'OpenTopoMap'});
+let currentLayer = street;
+document.getElementById('layerSelect').onchange = e=>{
+  map.removeLayer(currentLayer);
+  if(e.target.value=='satellite') currentLayer=satellite.addTo(map);
+  else if(e.target.value=='topo') currentLayer=topo.addTo(map);
+  else currentLayer=street.addTo(map);
+};
+
+let shopMarker = L.marker([-25.6242,28.0038]).addTo(map).bindPopup('Shop 4B - Armed');
+let meMarker = null;
+
+function updateLocation(pos){
+  let lat=pos.coords.latitude, lng=pos.coords.longitude;
+  document.getElementById('lastLoc').innerText = lat.toFixed(5)+', '+lng.toFixed(5);
+  if(!meMarker) meMarker=L.marker([lat,lng],{icon:L.divIcon({html:'📱',className:''})}).addTo(map);
+  else meMarker.setLatLng([lat,lng]);
+  shopMarker.setLatLng([lat,lng]); // center shop to you for demo
+
+  if(document.getElementById('trackToggle').checked){
+    fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId, shop:'Shop 4B', lat:lat, lng:lng, type:'TRACK_PING', battery:navigator.getBattery? '':''})});
+  }
 }
+navigator.geolocation.watchPosition(updateLocation, e=>console.log(e), {enableHighAccuracy:true});
+setInterval(()=>{navigator.geolocation.getCurrentPosition(updateLocation)}, 120000); // ping 2min
 
-function toggleTrack(){
-  const on = document.getElementById('trackToggle').checked
-  localStorage.setItem('always_track', on ? 'on' : 'off')
-  document.getElementById('trackStatus').innerText = on ? '🟢 ON - ping 2min' : '🔴 OFF'
-}
-
-// Client SOS hold logic (same as /sos - 1.5s)
-let t, p=0
-const btn=document.getElementById('clientSOS')
-btn.addEventListener('touchstart', e=>{p=0; t=setInterval(()=>{p+=0.07; btn.style.background=p>1?'#d00':'#000'; if(p>=1){clearInterval(t); btn.innerText='SENT - Ghost Mode'; document.body.style.background='#000'; fetch('/api/sos',{method:'POST',body:JSON.stringify({phoneId,type:'CLIENT_SOS'})})} },70)})
-btn.addEventListener('touchend', ()=>{clearInterval(t); if(p<1) btn.style.background='#111'})
-
-// Mock live update
-setInterval(()=>{
-  document.getElementById('score').innerText = (85+Math.floor(Math.random()*10))+'% SAFE'
-},10000)
+// SOS HOLD 1.5s
+let holdTimer;
+const btn=document.getElementById('sosBtn');
+btn.addEventListener('touchstart', startHold); btn.addEventListener('mousedown', startHold);
+btn.addEventListener('touchend', cancelHold); btn.addEventListener('mouseup', cancelHold);
+function startHold(){btn.innerText='HOLDING...'; holdTimer=setTimeout(()=>{ 
+  navigator.geolocation.getCurrentPosition(pos=>{
+    fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:'Shop 4B',lat:pos.coords.latitude,lng:pos.coords.longitude,type:'CLIENT_SOS_SILENT'})}).then(()=>{btn.innerText='SENT - Ghost Mode'; btn.style.background='#16a34a'; document.getElementById('armedTime').innerText='SOS SENT '+new Date().toLocaleTimeString();});
+  });
+},1500);}
+function cancelHold(){clearTimeout(holdTimer); if(btn.innerText.includes('HOLDING')) btn.innerText='HOLD 1.5s FOR HELP\nSilent + Tracking';}
+function toggleArm(){let t=document.getElementById('armedTime'); t.innerText=t.innerText.includes('ON')?'OFF':'ON - '+new Date().toLocaleTimeString().slice(0,5)+' Today';}
 </script>
-</body>
-  </html>
+</body></html>
