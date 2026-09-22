@@ -1,17 +1,105 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>PATROLLERS - 5MIN VIDEO</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body{margin:0;font-family:system-ui;background:#fff}#map{height:60vh;width:100%}</style>
-</head><body>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:#f5f5f7}
+.top{background:#0f172a;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:99}
+.top b{font-size:18px;letter-spacing:.3px}
+.badge{background:#22c55e;color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800}
+.logout{background:#fff;color:#0f172a;border:0;padding:7px 14px;border-radius:20px;font-weight:700;font-size:12px}
+.bar{background:#fff;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #eee}
+.select{padding:8px 12px;border-radius:10px;border:1px solid #ddd;background:#fff}
+.btns{padding:8px 14px;border-radius:8px;border:0;font-weight:800}
+.btns.black{background:#111;color:#fff}.btns.blue{background:#2563eb;color:#fff}
+#map{height:58vh;width:100%;background:#ddd}
+.leaflet-tile{filter:none!important}
+.card{margin:12px;background:#fff;border-radius:14px;padding:14px;border:1px solid #e5e7eb}
+.card.blue{border:2px solid #2563eb}
+.small{font-size:12px;color:#666}
+.leaf{font-size:10px}
+</style>
+</head>
+<body>
+<div class="top">
+<div><b>🛡️ PATROLLERS - 5MIN VIDEO</b><br><span class="small" style="color:#94a3b8" id="uEmail"></span></div>
+<div style="display:flex;gap:8px;align-items:center"><span class="badge">● 5MIN REC LIVE</span><button class="logout" onclick="localStorage.clear();location.href='/login'">Logout</button></div>
+</div>
+
+<div class="bar">
+<b>Tap 📍 pin - See 5min video</b>
+<select class="select" id="mapType" onchange="changeMap()">
+<option>Google HD - CLEAR</option>
+<option>OpenStreetMap</option>
+</select>
+<button class="btns black">20</button><button class="btns blue">21</button>
+</div>
+
 <div id="map"></div>
-<div id="list" style="padding:12px"></div>
+
+<div class="card blue" id="videoCard">
+<b>🎥 T780 - 5 MIN Videos Live</b><br>
+<span class="small">Newest first - tap to track + WhatsApp</span>
+<div id="videos" style="margin-top:8px;font-weight:600">No 5min videos yet</div>
+</div>
+
+<div class="card" id="clientCard">
+<b>📍 Client Pins - Tap</b>
+<div id="clients">No clients</div>
+<div style="margin-top:10px;background:#f8fafc;padding:10px;border-radius:10px;font-size:13px" id="selected">Select pin</div>
+</div>
+
 <script>
-let map=L.map('map').setView([-25.6,27.98],13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-async function load(){let r=await fetch('/api/sos-feed');let d=await r.json();
- document.getElementById('list').innerHTML=d.map(x=>`<div>${x.name} - ${x.lat},${x.lng} - ${x.sos?'🚨SOS':''} ${x.time}</div>`).join('')||'No clients yet';
- d.forEach(x=>{if(x.lat) L.marker([x.lat,x.lng]).addTo(map).bindPopup(x.name)});
+let auth=JSON.parse(localStorage.getItem('zondi_auth')||'{}');
+document.getElementById('uEmail').innerText=auth.email||'mkhwanazig33@gmail.com';
+
+let map=L.map('map',{zoomControl:false}).setView([-25.6085,27.9802],16);
+let osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21});
+let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21});
+sat.addTo(map);
+L.control.zoom({position:'topleft'}).addTo(map);
+
+function changeMap(){
+ let v=document.getElementById('mapType').value;
+ if(v.includes('Google')){map.removeLayer(osm);sat.addTo(map);}
+ else{map.removeLayer(sat);osm.addTo(map);}
+}
+
+let markers=[];
+async function load(){
+ try{
+  let r=await fetch('/api/sos-feed'); let data=await r.json();
+  let cList=document.getElementById('clients');
+  if(!data.length){cList.innerText='No clients';}
+  else{
+   cList.innerHTML=data.map((x,i)=>`<div onclick="focusPin(${i})" style="padding:8px;border-bottom:1px solid #eee;cursor:pointer">
+   ${x.sos?'🚨 <b style=color:#dc2626>SOS</b> - ':''}<b>${x.name||x.email}</b> - ${x.time||''}<br>
+   <span style="font-size:11px;color:#666">${x.lat.toFixed(5)}, ${x.lng.toFixed(5)}</span></div>`).join('');
+  }
+  // clear old markers
+  markers.forEach(m=>map.removeLayer(m)); markers=[];
+  data.forEach((x,i)=>{
+   if(!x.lat) return;
+   let m=L.marker([x.lat,x.lng]).addTo(map).bindPopup(`<b>${x.name}</b><br>${x.sos?'🚨 SOS':''}<br><a href="https://wa.me/?text=Help at ${x.lat},${x.lng}" target="_blank">WhatsApp</a>`);
+   m.on('click',()=>focusPin(i));
+   markers.push(m);
+  });
+ }catch(e){console.log(e)}
+}
+function focusPin(i){
+ fetch('/api/sos-feed').then(r=>r.json()).then(data=>{
+  let x=data[i]; if(!x) return;
+  map.setView([x.lat,x.lng],19);
+  document.getElementById('selected').innerHTML=`<b>${x.name}</b> - ${x.sos?'🚨 SOS URGENT':''}<br>Lat: ${x.lat}<br>Lng: ${x.lng}<br><br>
+  <a href="https://www.google.com/maps/dir/?api=1&destination=${x.lat},${x.lng}" target="_blank" style="background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">📍 Navigate</a>
+  <a href="https://wa.me/?text=ZONDI ALERT: ${x.name} needs help at https://maps.google.com/?q=${x.lat},${x.lng}" target="_blank" style="background:#25D366;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-left:8px">WhatsApp</a>`;
+ });
 }
 load(); setInterval(load,5000);
-</script></body></html>
+</script>
+</body>
+</html>
