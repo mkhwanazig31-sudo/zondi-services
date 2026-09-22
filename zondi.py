@@ -1,40 +1,96 @@
-# main.py - ZONDI SERVICES PLATFORM - FULL VERSION
-# eTera T780 as a Feature Tab
-# Run: pip install flask flask-cors && python main.py
-# Open: http://127.0.0.1:5000
-
-from flask import Flask, request, jsonify, render_template_string, send_from_directory
+# main.py - ZONDI SERVICES - CLEAN FOR RENDER
+from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
-import datetime, os, json, base64
+import datetime, os, json
 from pathlib import Path
 
 app = Flask(__name__)
 CORS(app)
 
-# Setup folders
 Path("evidence").mkdir(exist_ok=True)
-Path("faces").mkdir(exist_ok=True)
 
-class ZondiServices:
-    def __init__(self):
-        self.devices = {
-            "T780-07": {
-                "id": "T780-07", "model": "eTera T780-NFC", "status": "ONLINE",
-                "battery": 78, "signal": "-73 dBm", "lat": -25.6242, "lng": 28.0038,
-                "zone": "Ga-Rankuwa - Zone 4B", "guard": "Alex Davis",
-                "nfc_last_tap": None, "sos_count": 0
-            }
-        }
-        self.evidence = self.load_evidence()
-        self.registered_faces = {} # guard_name -> face encoding path
+# Data
+devices = {
+    "T780-07": {
+        "id": "T780-07", "model": "eTera T780-NFC", "status": "ONLINE",
+        "battery": 78, "hours_left": 11, "signal": "-73 dBm",
+        "lat": -25.6242, "lng": 28.0038, "zone": "Ga-Rankuwa - Zone 4B",
+        "guard": "Alex Davis"
+    }
+}
+evidence_list = []
 
-    def load_evidence(self):
-        try:
-            with open("evidence/log.json", "r") as f: return json.load(f)
-        except: return []
+HTML_PAGE = """
+<!DOCTYPE html>
+<html><head><title>Zondi Services</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#050a0f] text-white">
+<div class="max-w-6xl mx-auto p-4">
+<h1 class="text-2xl font-bold text-cyan-400 mb-4">🛡️ ZONDI SERVICES - main.py LIVE</h1>
 
-    def save_evidence_log(self):
-        with open("evidence/log.json", "w") as f: json.dump(self.evidence, f, indent=2)
+<div class="flex gap-2 mb-4">
+<button onclick="showTab('t780')" id="btn-t780" class="bg-cyan-500 text-black px-4 py-2 rounded font-bold">PTT Devices - T780</button>
+<button onclick="showTab('evidence')" id="btn-evidence" class="bg-gray-800 px-4 py-2 rounded">Evidence ({{ev_count}})</button>
+</div>
+
+<div id="tab-t780" class="grid lg:grid-cols-2 gap-4">
+<div class="bg-[#0f1a24] border border-cyan-800/30 rounded-xl p-5">
+<h2 class="font-bold">eTera {{dev.model}} - {{dev.id}}</h2>
+<p class="text-xs text-green-400">{{dev.status}} • {{dev.signal}} • {{dev.battery}}% - {{dev.hours_left}}h left</p>
+<div class="grid grid-cols-3 gap-2 my-4 text-[10px]">
+<div class="bg-black p-2 rounded">IP68 Water/Dust</div>
+<div class="bg-black p-2 rounded">5200mAh</div>
+<div class="bg-black p-2 rounded">NFC</div>
+<div class="bg-black p-2 rounded">4G LTE</div>
+<div class="bg-black p-2 rounded">Dual SIM</div>
+<div class="bg-black p-2 rounded">M6 Port</div>
+</div>
+<button id="pttBtn" class="w-full py-6 rounded-xl font-black bg-cyan-500 text-black">HOLD TO TALK - PTT</button>
+<button onclick="triggerSOS()" class="w-full mt-2 py-4 bg-red-900/50 border border-red-700 rounded-xl font-bold text-red-300">SOS EMERGENCY RECORD</button>
+<video id="preview" autoplay muted class="w-full h-40 bg-black rounded mt-3 hidden"></video>
+<div id="log" class="mt-3 bg-black p-2 rounded h-20 overflow-y-auto text-[11px] font-mono text-gray-400"></div>
+</div>
+
+<div class="bg-[#0f1a24] rounded-xl p-4">
+<h3 class="font-bold text-sm">Live Location - {{dev.zone}}</h3>
+<p class="text-xs text-gray-500" id="coords">{{dev.lat}}, {{dev.lng}}</p>
+<div class="bg-black h-40 rounded mt-2 flex items-center justify-center text-xs text-gray-600">MAP - {{dev.zone}}</div>
+<button onclick="sendGPS()" class="mt-2 w-full bg-gray-800 py-1 rounded text-xs">Update GPS</button>
+<div id="evPreview" class="mt-4 text-xs"></div>
+</div>
+</div>
+
+<div id="tab-evidence" class="hidden bg-[#0f1a24] rounded-xl p-5">
+<h2 class="font-bold">Evidence Locker - Dev Account</h2>
+<div id="evList" class="mt-3 space-y-2 text-xs"></div>
+</div>
+
+</div>
+<script>
+function showTab(t){document.getElementById('tab-t780').classList.add('hidden');document.getElementById('tab-evidence').classList.add('hidden');document.getElementById('tab-'+t).classList.remove('hidden');}
+let recorder=null, chunks=[];
+function addLog(m){document.getElementById('log').innerHTML='<div>'+new Date().toLocaleTimeString()+' - '+m+'</div>'+document.getElementById('log').innerHTML;}
+document.getElementById('pttBtn').onmousedown=function(){this.innerText='● TRANSMITTING...';addLog('PTT Start')};
+document.getElementById('pttBtn').onmouseup=function(){this.innerText='HOLD TO TALK - PTT';addLog('PTT End')};
+function sendGPS(){fetch('/api/location?device_id=T780-07&lat=-25.6245&lng=28.004').then(r=>r.json()).then(d=>{addLog('GPS: '+d.lat+','+d.lng); document.getElementById('coords').innerText=d.lat+', '+d.lng;});}
+async function triggerSOS(){
+addLog('SOS - Starting 30s rec...');
+const preview=document.getElementById('preview');preview.classList.remove('hidden');
+try{
+const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+preview.srcObject=stream; chunks=[]; recorder=new MediaRecorder(stream);
+recorder.ondataavailable=e=>chunks.push(e.data);
+recorder.onstop=async()=>{
+const blob=new Blob(chunks,{type:'video/webm'});
+const form=new FormData();form.append('video',blob,'sos.webm');form.append('device_id','T780-07');
+const res=await fetch('/api/emergency/upload',{method:'POST',body:form});
+const data=await res.json(); addLog('Uploaded: '+data.id); document.getElementById('evPreview').innerHTML='<div class=text-green-400>'+data.id+' saved</div>';
+};
+recorder.start(); setTimeout(()=>{recorder.stop(); stream.getTracks().forEach(t=>t.stop());}, 10000);
+}catch(e){addLog('Camera error: '+e.message+' - saving without video'); fetch('/api/emergency/upload',{method:'POST',body:new FormData()}).then(r=>r.json()).then(d=>addLog('Evidence logged: '+d.id));}
+}
+async function loadEvidence(){const res=await fetch('/api/evidence');const list=await res.json();document.getElementById('evList').innerHTML=list.map(e        with open("evidence/log.json", "w") as f: json.dump(self.evidence, f, indent=2)
 
     def add_evidence(self, device_id, lat, lng, video_filename=None):
         entry = {
