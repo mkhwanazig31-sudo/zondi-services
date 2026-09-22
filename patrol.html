@@ -1,86 +1,101 @@
-<!DOCTYPE html><html><head><title>Patrollers Portal</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-body{margin:0;font-family:system-ui;background:#0f172a;overflow:hidden}
-#map{position:absolute;inset:0;top:52px;bottom:170px;z-index:1;border-radius:0 0 24px 24px}
-.nav{height:52px;padding:0 14px;display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#fff;position:fixed;top:0;left:0;right:0;z-index:800}
-.top-tools{position:fixed;top:62px;left:10px;right:10px;z-index:700;display:flex;gap:6px}
-.top-tools select,.top-tools button{padding:8px 12px;border-radius:12px;border:0;background:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-.dock{position:fixed;bottom:0;left:0;right:0;z-index:900;background:#fff;border-radius:28px 28px 0 0;padding:14px 12px 18px;box-shadow:0 -10px 30px rgba(0,0,0,.3);max-height:54vh;overflow-y:auto}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.app{ text-align:center; cursor:pointer; padding:8px 4px; border-radius:16px; border:1px solid transparent }
-.app:active{background:#f1f5f9;border-color:#e2e8f0}
-.app .ico{width:52px;height:52px;margin:0 auto;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 3px 10px rgba(0,0,0,.12)}
-.app span{font-size:10px;font-weight:700;display:block;margin-top:6px;color:#334155}
-.sheet{position:fixed;bottom:180px;left:10px;right:10px;z-index:850;background:#fff;border-radius:18px;padding:12px;max-height:45vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none}
-.sheet.open{display:block}
-</style></head><body>
-<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth) location.href='/login'</script>
-<div class="nav"><div><b>🛡️ PATROLLERS</b><br><span id="gEmail" style="font-size:10px;color:#94a3b8"></span></div><div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;background:#16a34a;padding:5px 10px;border-radius:12px;color:#fff">● LIVE</span><button onclick="localStorage.clear();location.href='/login'" style="padding:6px 12px;border-radius:20px;border:0;background:#fff;font-size:11px">Logout</button></div></div>
-<div id="map"></div>
-<div class="top-tools"><select id="layerSelect"><option value="satellite">🛰️ Satellite</option><option value="street">🗺️ Street</option></select><button onclick="map.setZoom(19)">19</button><button onclick="map.setZoom(20)" style="background:#111;color:#fff">20 Roof</button><button onclick="map.setZoom(21)">21</button></div>
+from flask import Flask, request, jsonify, send_from_directory
+import json, os
+from datetime import datetime
 
-<div id="sheetClients" class="sheet"><div style="display:flex;justify-content:space-between"><b>📍 All Clients Pins</b><button onclick="closeSheets()" style="border:0;background:#f1f5f9;padding:4px 10px;border-radius:8px">✕</button></div><div id="clientList" style="margin-top:10px;display:grid;gap:8px"></div></div>
-<div id="sheetSOS" class="sheet"><div style="display:flex;justify-content:space-between"><b>🚨 Live SOS</b><button onclick="closeSheets()" style="border:0;background:#f1f5f9;padding:4px 10px;border-radius:8px">✕</button></div><div id="sosFeed" style="margin-top:10px"></div></div>
-<div id="sheetTrail" class="sheet"><div style="display:flex;justify-content:space-between"><b id="trailTitle">🔵 Blue Trail</b><button onclick="closeSheets()" style="border:0;background:#f1f5f9;padding:4px 10px;border-radius:8px">✕</button></div><div id="trailBox" style="margin-top:8px;font-size:12px"></div></div>
+app = Flask(__name__, static_folder='.')
 
-<div class="dock">
-<div style="width:36px;height:4px;background:#cbd5e1;border-radius:10px;margin:0 auto 12px"></div>
-<div style="display:flex;justify-content:space-between;margin-bottom:10px"><b style="font-size:13px">Zondi OS - Apps</b><span id="cCount" style="font-size:11px;color:#64748b">0 clients</span></div>
-<div class="grid">
-  <div class="app" onclick="openSheet('clients')"><div class="ico" style="background:#dcfce7">📍</div><span>Client Pins</span></div>
-  <div class="app" onclick="openSheet('trail')"><div class="ico" style="background:#dbeafe">🔵</div><span>Blue Trail</span></div>
-  <div class="app" onclick="openSheet('sos')"><div class="ico" style="background:#fee2e2">🚨</div><span>SOS Feed</span></div>
-  <div class="app" onclick="toggleLayer()"><div class="ico" style="background:#fef3c7">🛰️</div><span>Satellite</span></div>
-  <div class="app" onclick="if(activeId) focusClient(activeId)"><div class="ico" style="background:#ede9fe">🎯</div><span>Follow</span></div>
-  <div class="app" onclick="openGoogle()"><div class="ico" style="background:#ffedd5">📤</div><span>Google Maps</span></div>
-  <div class="app" onclick="loadAll()"><div class="ico" style="background:#f1f5f9">🔄</div><span>Refresh</span></div>
-  <div class="app" onclick="map.setView([-25.60215,27.97990],16)"><div class="ico" style="background:#111;color:#fff">🏠</div><span>Home</span></div>
-</div>
-</div>
+SOS_FILE = 'sos_feed.json'
+USERS_FILE = 'users.json'
+PATROLLER_FILE = 'patrollers_live.json'
 
-<script>
-document.getElementById('gEmail').innerText=auth.email;
-let map=L.map('map',{zoomControl:false,maxZoom:22}).setView([-25.60215,27.97990],18);
-let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22,maxNativeZoom:19}).addTo(map);
-let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19});
-let cur=sat, layer='sat';
-function toggleLayer(){map.removeLayer(cur); if(layer=='sat'){cur=street.addTo(map);layer='street';}else{cur=sat.addTo(map);layer='sat';}}
-document.getElementById('layerSelect').onchange=e=>{map.removeLayer(cur); cur=e.target.value=='satellite'?sat.addTo(map):street.addTo(map); layer=e.target.value=='satellite'?'sat':'street';}
-let markers={}, poly=null, activeId=null, lastLat=-25.60215, lastLng=27.97990;
-function googlePin(label){return L.divIcon({html:`<div style="transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center"><div style="background:#111;color:#fff;padding:5px 10px;border-radius:14px;font-size:11px;font-weight:800;box-shadow:0 3px 8px rgba(0,0,0,.35);white-space:nowrap">${label.slice(0,20)}</div><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid #111"></div><div style="font-size:32px;margin-top:2px;filter:drop-shadow(0 3px 4px rgba(0,0,0,.4))">📍</div></div>`,className:'',iconSize:[0,0]})}
-function blueDot(){return L.divIcon({html:`<div style="position:relative;width:18px;height:18px"><div style="position:absolute;inset:-8px;background:rgba(66,133,244,.22);border-radius:50%"></div><div style="position:absolute;top:50%;left:50%;width:16px;height:16px;background:#4285f4;border:3px solid #fff;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 2px 6px rgba(0,0,0,.3)"></div></div>`,className:'',iconSize:[18,18]})}
-function openSheet(n){closeSheets(); if(n=='clients') document.getElementById('sheetClients').classList.add('open'); if(n=='sos') document.getElementById('sheetSOS').classList.add('open'); if(n=='trail') document.getElementById('sheetTrail').classList.add('open');}
-function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('open'))}
-function openGoogle(){window.open(`https://www.google.com/maps?q=${lastLat},${lastLng}`,'_blank')}
-function loadAll(){
- fetch('/api/sos-feed').then(r=>r.json()).then(list=>{
-  let uniq={}; list.forEach(e=>{if(e.phoneId) uniq[e.phoneId]=e});
-  document.getElementById('cCount').innerText=Object.keys(uniq).length+' clients';
-  let html='';
-  Object.values(uniq).forEach(e=>{
-   let name=e.name||'Client'; let addr=e.address||''; let isSOS=e.type&&e.type.includes('SOS');
-   html+=`<div onclick="focusClient('${e.phoneId}')" style="padding:10px;border:1px solid ${isSOS?'#fca5a5':'#e5e7eb'};border-radius:12px;background:${isSOS?'#fef2f2':'#fff'};cursor:pointer"><b>📍 ${name} - ${addr}</b><div style="font-size:10px;color:#666">${e.phoneId}</div><div style="font-size:11px;color:${isSOS?'#e11d48':'#2563eb'};font-weight:700">${isSOS?'🚨 SOS':'▶ TRACK'}</div></div>`;
-   if(e.lat&&e.lng){ if(!markers[e.phoneId]){markers[e.phoneId]=L.marker([e.lat,e.lng],{icon:googlePin(`${name} - ${addr}`)}).addTo(map); markers[e.phoneId].on('click',()=>focusClient(e.phoneId));} else markers[e.phoneId].setLatLng([e.lat,e.lng]);}
-  });
-  document.getElementById('clientList').innerHTML=html||'No clients yet';
-  document.getElementById('sosFeed').innerHTML=list.slice(-20).reverse().map(e=>`<div onclick="focusClient('${e.phoneId}')" style="padding:8px;border-bottom:1px solid #eee;cursor:pointer"><b style="color:#e11d48">${e.type}</b> ${e.address||''}<br><span style="font-size:10px;color:#666">${e.time?.slice(11,19)} ${e.phoneId}</span></div>`).join('')||'No SOS';
- });
-}
-function focusClient(id){
- activeId=id; closeSheets(); document.getElementById('sheetTrail').classList.add('open');
- fetch('/api/tracking/'+id).then(r=>r.json()).then(t=>{
-  t=t.filter(p=>p.lat&&p.lng); if(!t.length) return;
-  let last=t[t.length-1]; lastLat=last.lat; lastLng=last.lng;
-  if(poly) map.removeLayer(poly);
-  map.flyTo([last.lat,last.lng],20,{duration:1});
-  let pts=t.slice(-20).map(p=>[p.lat,p.lng]);
-  poly=L.polyline(pts,{color:'#2563eb',weight:5,lineCap:'round'}).addTo(map);
-  L.marker([last.lat,last.lng],{icon:blueDot()}).addTo(map);
-  L.circle([last.lat,last.lng],{radius:22,color:'#4285f4',fillColor:'#4285f4',fillOpacity:.15,weight:1}).addTo(map);
-  document.getElementById('trailTitle').innerText=`🔵 ${last.address||id}`;
-  document.getElementById('trailBox').innerHTML=`<b>${last.name||''} - ${last.address||''}</b><br>📍 ${last.lat.toFixed(5)}, ${last.lng.toFixed(5)}<br><br><a href="https://www.google.com/maps?q=${last.lat},${last.lng}" target="_blank" style="color:#2563eb;font-weight:800">Open in Google Maps</a><br><br>${t.slice(-8).reverse().map(e=>`${e.time?.slice(11,19)} ${e.type}`).join('<br>')}`;
- });
-}
-setInterval(loadAll,4000); loadAll();
-</script>
-</body></html>
+def load_json(f):
+    if not os.path.exists(f): return []
+    try:
+        with open(f) as fh: return json.load(fh)
+    except: return []
+
+def save_json(f, data):
+    with open(f,'w') as fh: json.dump(fh, data, indent=2)
+
+@app.route('/')
+def home(): return send_from_directory('.', 'index.html')
+
+@app.route('/login')
+def login_page(): return send_from_directory('.', 'login.html')
+
+@app.route('/clients')
+@app.route('/client')
+@app.route('/clients.html')
+def clients_page(): return send_from_directory('.', 'clients.html')
+
+@app.route('/patrollers')
+@app.route('/patrol')
+@app.route('/patrollers.html')
+@app.route('/patrol.html')
+def patrollers_page(): return send_from_directory('.', 'patrol.html')
+
+@app.route('/shop')
+def shop_page(): return send_from_directory('.', 'shop.html')
+
+@app.route('/sos')
+def sos_page(): return send_from_directory('.', 'sos.html')
+
+@app.route('/sw.js')
+def sw(): return send_from_directory('.', 'sw.js')
+
+@app.route('/manifest.json')
+def manifest(): return send_from_directory('.', 'manifest.json')
+
+@app.route('/api/sos', methods=['POST'])
+def api_sos():
+    data = request.json
+    data['time'] = datetime.now().isoformat()
+    feed = load_json(SOS_FILE)
+    feed.append(data)
+    if len(feed) > 800: feed = feed[-800:]
+    save_json(SOS_FILE, feed)
+    return jsonify({"ok":True})
+
+@app.route('/api/sos-feed')
+def api_feed(): return jsonify(load_json(SOS_FILE))
+
+@app.route('/api/tracking/<phone_id>')
+def api_tracking(phone_id):
+    feed = load_json(SOS_FILE)
+    t = [x for x in feed if x.get('phoneId')==phone_id]
+    return jsonify(t)
+
+@app.route('/api/patroller-ping', methods=['POST'])
+def patroller_ping():
+    d=request.json
+    d['time']=datetime.now().isoformat()
+    data=load_json(PATROLLER_FILE)
+    data=[x for x in data if x.get('email')!=d.get('email')]
+    data.append(d)
+    save_json(PATROLLER_FILE, data)
+    return jsonify({"ok":True})
+
+@app.route('/api/patrollers-live')
+def patrollers_live(): return jsonify(load_json(PATROLLER_FILE))
+
+@app.route('/api/users')
+def api_users(): return jsonify(load_json(USERS_FILE))
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    d=request.json
+    users=load_json(USERS_FILE)
+    u=next((x for x in users if x['email']==d['email'] and x['password']==d['password']), None)
+    if u: return jsonify(u)
+    return jsonify({"error":"not found"}), 401
+
+@app.route('/api/signup', methods=['POST'])
+def api_signup():
+    d=request.json
+    users=load_json(USERS_FILE)
+    users.append(d)
+    save_json(USERS_FILE, users)
+    return jsonify({"ok":True})
+
+if __name__=='__main__':
+    app.run(host='0.0.0.0', port=10000)
