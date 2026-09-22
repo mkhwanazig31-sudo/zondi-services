@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zondi - My Shop Safe?</title>
+<style>
+  *{font-family:system-ui;margin:0;box-sizing:border-box}
+  body{background:#f5f5f5;padding:12px}
+  .card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px #0001}
+  .score{font-size:42px;font-weight:900}
+  .safe{color:#0a0}.warn{color:#e67e00}.danger{color:#d00}
+  .btn{border:0;border-radius:12px;padding:14px;width:100%;font-size:16px;font-weight:700}
+  .btn-red{background:#111;color:#fff}
+  .btn-ghost{background:#000;color:#fff}
+  #map{height:180px;background:#ddd;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#666}
+  .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+
+<!-- SAFETY SCORE HERO -->
+<div class="card" style="text-align:center">
+  <div class="score safe" id="score">92% SAFE</div>
+  <div id="scoreText">Shop 4B Armed • 3 guards near</div>
+  <div style="margin-top:8px;font-size:13px;color:#666">Tracking: <span id="trackStatus">🟢 ON - ping 2min</span></div>
+</div>
+
+<!-- CLIENT SOS - SAME BUTTON AS /sos BUT INSIDE DASHBOARD -->
+<div class="card" style="text-align:center;border:2px solid #000">
+  <p style="font-weight:800">EMERGENCY?</p>
+  <button class="btn btn-ghost" id="clientSOS" style="height:90px;border-radius:50px;margin-top:8px">
+    HOLD 1.5s FOR HELP<br><small style="font-weight:400">Silent + Tracking</small>
+  </button>
+  <p style="font-size:12px;color:#666;margin-top:6px">No siren - we track phone if taken</p>
+</div>
+
+<!-- SHOP STATUS -->
+<div class="card">
+  <div class="row"><span>🔒 Shop Armed</span><span id="armed">19:02 Today <b>ON</b></span></div>
+  <div class="row"><span>👮 Nearest Guard</span><span id="guard">Sipho 120m • 2m ago</span></div>
+  <div class="row"><span>📍 Last Location</span><span id="lastLoc">Shop 4B - now</span></div>
+  <button class="btn" style="background:#eef;margin-top:8px" onclick="toggleArm()">Arm / Disarm Shop</button>
+</div>
+
+<!-- LIVE MAP MINI -->
+<div class="card">
+  <div id="map">MAP: Shop 📍 + 3 guards moving<br><small>(Plug Google Maps here - lat/lng from /api/sos)</small></div>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button class="btn" style="background:#fff;border:1px solid #ccc;flex:1">Call Guard</button>
+    <button class="btn" style="background:#fff;border:1px solid #ccc;flex:1" onclick="location.href='/sos'">Open /sos</button>
+  </div>
+</div>
+
+<!-- ALWAYS-ON TOGGLE -->
+<div class="card">
+  <div class="row"><span>🛰️ Always-on tracking</span><label><input type="checkbox" id="trackToggle" checked onchange="toggleTrack()"> ON</label></div>
+  <p style="font-size:12px;color:#666">Uses ~50MB/day. Keeps trail even if you don't press SOS. Turn on for safety.</p>
+  <p style="font-size:11px;color:#999;margin-top:4px">If phone off/erased, we keep last 20 points. Hide T780 device for backup tracker.</p>
+</div>
+
+<script>
+// Reuse phoneId from sos.html
+let phoneId = localStorage.getItem('zondi_id')
+document.getElementById('lastLoc').innerText = phoneId + ' - tracking'
+
+function toggleArm(){
+  const armed = document.getElementById('armed')
+  armed.innerHTML = armed.innerText.includes('ON') ? '19:45 <b>OFF</b>' : new Date().toLocaleTimeString().slice(0,5)+' <b>ON</b>'
+  // POST to /api/shop/arm
+}
+
+function toggleTrack(){
+  const on = document.getElementById('trackToggle').checked
+  localStorage.setItem('always_track', on ? 'on' : 'off')
+  document.getElementById('trackStatus').innerText = on ? '🟢 ON - ping 2min' : '🔴 OFF'
+}
+
+// Client SOS hold logic (same as /sos - 1.5s)
+let t, p=0
+const btn=document.getElementById('clientSOS')
+btn.addEventListener('touchstart', e=>{p=0; t=setInterval(()=>{p+=0.07; btn.style.background=p>1?'#d00':'#000'; if(p>=1){clearInterval(t); btn.innerText='SENT - Ghost Mode'; document.body.style.background='#000'; fetch('/api/sos',{method:'POST',body:JSON.stringify({phoneId,type:'CLIENT_SOS'})})} },70)})
+btn.addEventListener('touchend', ()=>{clearInterval(t); if(p<1) btn.style.background='#111'})
+
+// Mock live update
+setInterval(()=>{
+  document.getElementById('score').innerText = (85+Math.floor(Math.random()*10))+'% SAFE'
+},10000)
+</script>
+</body>
+  </html>
