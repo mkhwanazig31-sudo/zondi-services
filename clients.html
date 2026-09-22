@@ -1,76 +1,48 @@
-<!DOCTYPE html><html><head>
-<title>Clients Portal - Zondi</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-body{margin:0;font-family:system-ui;background:#fff}
-.app{max-width:420px;margin:0 auto;min-height:100vh;background:#f8fafc;box-shadow:0 0 0 1px #eee;display:flex;flex-direction:column}
-.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#fff;border-bottom:1px solid #eee;position:sticky;top:0;z-index:10}
-.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:10px 12px}
-#map{height:320px;border-radius:12px}
-button{font-family:system-ui}
-</style>
-</head><body>
-<script>
-let auth = JSON.parse(localStorage.getItem('zondi_auth')||'null');
-if(!auth){ location.href='/login'; }
-if(auth.role!=='client'){ location.href='/patrollers'; }
-</script>
-
+<!DOCTYPE html><html><head><title>Clients Portal</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{margin:0;font-family:system-ui;background:#fff}.app{max-width:420px;margin:0 auto;min-height:100vh;background:#f8fafc;box-shadow:0 0 0 1px #eee;display:flex;flex-direction:column}.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#fff;border-bottom:1px solid #eee;position:sticky;top:0;z-index:10}.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:10px 12px}#map{height:360px;border-radius:12px}</style></head><body>
+<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth){location.href='/login'} if(auth.role!=='client'){location.href='/patrollers'}</script>
 <div class="app">
-<div class="nav">
-<div><b style="color:#2563eb">CLIENTS PORTAL</b><br><span style="font-size:10px;color:#888" id="userEmail">Shop Owner</span></div>
-<button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid #ddd;background:#fff">Logout</button>
-</div>
+<div class="nav"><div><b style="color:#2563eb">CLIENTS PORTAL</b><br><span style="font-size:10px;color:#888" id="userEmail"></span><br><span style="font-size:11px" id="myPin"></span></div><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid #ddd;background:#fff">Logout</button></div>
 
-<div class="card" style="text-align:center;background:linear-gradient(#fff,#f0fdf4)">
-<div style="font-size:36px;font-weight:900;color:#16a34a">92% SAFE</div>
-<div style="font-size:13px">Shop 4B Armed • <span id="guardNear">3 guards near</span></div>
-<div style="font-size:11px;color:#666">ID: <span id="myId"></span> • 🟢 Tracking ON</div>
-</div>
+<div class="card" style="text-align:center;background:linear-gradient(#fff,#f0fdf4)"><div style="font-size:32px;font-weight:900;color:#16a34a">92% SAFE</div><div style="font-size:13px" id="shopInfo"></div><div style="font-size:11px;color:#666">ID: <span id="myId"></span> • <span id="lastLoc">waiting GPS...</span></div>
+<button onclick="startGPS()" style="margin-top:8px;width:100%;padding:8px;border-radius:10px;border:1px solid #111;background:#fff;font-size:12px">🔄 Retry GPS</button></div>
 
-<div class="card" style="text-align:center;border:2px solid #111">
-<b>EMERGENCY - CLIENT ONLY</b>
-<button id="sosBtn" style="width:100%;padding:18px;background:#111;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP<br><span style="font-size:11px;font-weight:400">Silent - Saves Video Vault</span></button>
-</div>
+<div class="card" style="text-align:center;border:2px solid #111"><b>EMERGENCY</b><button id="sosBtn" style="width:100%;padding:18px;background:#111;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP</button><div style="font-size:10px;color:#666;margin-top:6px" id="addrShow"></div></div>
 
-<div class="card">
-<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #f1f5f9"><span>🔒 Shop Armed</span><b id="armed">ON - 18:32</b></div>
-<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #f1f5f9"><span>👮 Nearest Guard</span><span id="nearest">Sipho 120m</span></div>
-<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0"><span>📍 My Location</span><span id="lastLoc" style="font-size:11px">waiting...</span></div>
-<div style="display:flex;gap:8px;margin-top:10px"><button onclick="toggleArm()" style="flex:1;padding:10px;border-radius:10px;border:0;background:#ede9fe;font-weight:700">Arm/Disarm</button><button onclick="window.location.href='tel:10111'" style="flex:1;padding:10px;border-radius:10px;border:1px solid #ddd;background:#fff">Call Guard</button></div>
-</div>
+<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="font-size:12px">My 📍 Pin - Guards see this</b><div style="display:flex;gap:4px"><button onclick="map.setZoom(19)" style="padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff;font-size:10px">19</button><button onclick="map.setZoom(20)" style="padding:4px 8px;border-radius:6px;border:0;background:#111;color:#fff;font-size:10px">20 Roof</button><button onclick="map.setZoom(21)" style="padding:4px 8px;border-radius:6px;border:1px solid #2563eb;background:#ede9fe;font-size:10px">21 SUPER</button></div></div><div id="map"></div></div>
 
-<div class="card">
-<div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="font-size:12px">My Shop Map - Guards find me here</b><select id="layerSelect" style="padding:4px;border-radius:8px;font-size:11px"><option value="street">Street</option><option value="satellite">Satellite - see roof</option><option value="topo">Topographic</option></select></div>
-<div id="map"></div>
-<div style="font-size:10px;color:#666;margin-top:4px">Client sees only own shop. Patroller sees ALL.</div>
-</div>
-
-<div style="margin-top:auto;padding:12px;display:flex;gap:8px;background:#fff;border-top:1px solid #eee">
-<a href="/" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:12px">Home</a>
-<a href="/shop" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:12px">Shop</a>
-<a href="/sos" style="flex:1;text-align:center;text-decoration:none;color:#e11d48;font-size:12px;font-weight:700">SOS</a>
-</div>
+<div style="margin-top:auto;padding:12px;display:flex;gap:8px;background:#fff;border-top:1px solid #eee"><a href="/" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:11px">Home</a><a href="/shop" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:11px">Shop</a><a href="/sos" style="flex:1;text-align:center;text-decoration:none;color:#e11d48;font-size:11px;font-weight:700">SOS</a></div>
 </div>
 
 <script>
+let myAddr = localStorage.getItem('zondi_address')||auth.address||'No address set';
+let myShop = localStorage.getItem('zondi_shopname')||'Shop 4B';
 document.getElementById('userEmail').innerText = auth.email;
+document.getElementById('myPin').innerHTML = `📍 ${auth.name||'Gontse'} - ${myAddr}`;
+document.getElementById('shopInfo').innerText = `${myShop} - ${myAddr}`;
+document.getElementById('addrShow').innerText = `📍 ${myAddr} - this address sent to patrollers`;
+
 let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).slice(2,6);
 localStorage.setItem('zondi_id', phoneId);
 document.getElementById('myId').innerText = phoneId;
-let map = L.map('map').setView([-25.6242,28.0038],17);
-let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
-let topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
-let cur=street;
-document.getElementById('layerSelect').onchange=e=>{map.removeLayer(cur); cur=e.target.value=='satellite'?sat.addTo(map):e.target.value=='topo'?topo.addTo(map):street.addTo(map);};
+
+let map = L.map('map',{maxZoom:22}).setView([-25.5851,-25.5851],18);
+let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19}).addTo(map);
+let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22,maxNativeZoom:19});
+let topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:17});
 let meMarker=null;
-function upd(pos){let lat=pos.coords.latitude,lng=pos.coords.longitude; document.getElementById('lastLoc').innerText=lat.toFixed(5)+','+lng.toFixed(5); if(!meMarker) meMarker=L.marker([lat,lng]).addTo(map).bindPopup('My Shop - Guard finds here'); else meMarker.setLatLng([lat,lng]); fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:'Shop 4B',lat:lat,lng:lng,type:'CLIENT_PING',video:'vault_auto'})});}
-navigator.geolocation.watchPosition(upd,null,{enableHighAccuracy:true});
+let statusEl=document.getElementById('lastLoc');
+function showGPS(lat,lng,acc){
+  statusEl.innerHTML=lat.toFixed(5)+','+lng.toFixed(5)+' • '+Math.round(acc)+'m';
+  statusEl.style.color='#16a34a';
+  if(!meMarker){ meMarker=L.marker([lat,lng]).addTo(map).bindPopup(`📍 ${auth.name||''}<br>${myShop}<br>${myAddr}<br>${lat.toFixed(5)},${lng.toFixed(5)}`); map.setView([lat,lng],20); }
+  else meMarker.setLatLng([lat,lng]);
+  fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:lat,lng:lng,type:'CLIENT_PING',email:auth.email})});
+}
+function gpsError(err){ statusEl.innerHTML = err.code==1?'❌ BLOCKED - Tap 🔒 → Allow location':'📡 No signal - go outside'; statusEl.style.color='#e11d48';}
+function startGPS(){ statusEl.innerHTML='⌛ Asking location...'; if(!navigator.geolocation){statusEl.innerHTML='No GPS'; return;} navigator.geolocation.getCurrentPosition(p=>{showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy); navigator.geolocation.watchPosition(p=>showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy),gpsError,{enableHighAccuracy:true,maximumAge:0,timeout:15000});},gpsError,{enableHighAccuracy:true,timeout:15000});}
+startGPS();
 let hold; let btn=document.getElementById('sosBtn');
-btn.addEventListener('touchstart',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:'Shop 4B',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',video:'SOS_VIDEO_SAVED'})}).then(()=>{btn.innerText='SOS SENT + VIDEO SAVED'; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('touchend',()=>clearTimeout(hold));
-function toggleArm(){let a=document.getElementById('armed'); a.innerText=a.innerText.includes('ON')?'OFF':'ON - '+new Date().toLocaleTimeString().slice(0,5);}
+btn.addEventListener('touchstart',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',email:auth.email})}).then(()=>{btn.innerText='SOS SENT + 📍 '+myAddr; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('touchend',()=>clearTimeout(hold));
 </script>
 </body></html>
