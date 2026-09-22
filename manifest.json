@@ -1,9 +1,8 @@
 {
-  "name": "Zondi Security",
+  "name": "Zondi",
   "short_name": "Zondi",
-  "start_url": "/",
+  "start_url": "/login",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#111111",
-  "icons": [{"src":"https://cdn-icons-png.flaticon.com/512/2091/2091665.png","sizes":"512x512","type":"image/png"}]
+  "theme_color": "#111111"
 }
