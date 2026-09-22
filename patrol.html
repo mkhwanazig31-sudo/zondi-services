@@ -1,105 +1,70 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>PATROLLERS - 5MIN VIDEO</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:#f5f5f7}
-.top{background:#0f172a;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:99}
-.top b{font-size:18px;letter-spacing:.3px}
-.badge{background:#22c55e;color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800}
-.logout{background:#fff;color:#0f172a;border:0;padding:7px 14px;border-radius:20px;font-weight:700;font-size:12px}
-.bar{background:#fff;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #eee}
-.select{padding:8px 12px;border-radius:10px;border:1px solid #ddd;background:#fff}
-.btns{padding:8px 14px;border-radius:8px;border:0;font-weight:800}
-.btns.black{background:#111;color:#fff}.btns.blue{background:#2563eb;color:#fff}
-#map{height:58vh;width:100%;background:#ddd}
-.leaflet-tile{filter:none!important}
-.card{margin:12px;background:#fff;border-radius:14px;padding:14px;border:1px solid #e5e7eb}
-.card.blue{border:2px solid #2563eb}
-.small{font-size:12px;color:#666}
-.leaf{font-size:10px}
-</style>
-</head>
-<body>
-<div class="top">
-<div><b>🛡️ PATROLLERS - 5MIN VIDEO</b><br><span class="small" style="color:#94a3b8" id="uEmail"></span></div>
-<div style="display:flex;gap:8px;align-items:center"><span class="badge">● 5MIN REC LIVE</span><button class="logout" onclick="localStorage.clear();location.href='/login'">Logout</button></div>
+<!DOCTYPE html><html><head><title>Patrollers Portal</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{margin:0;font-family:system-ui;background:#f8fafc}.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#fff;position:sticky;top:0;z-index:20}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px;margin:8px}#map{height:68vh;border-radius:12px;min-height:400px}.grid{display:grid;grid-template-columns:1fr 360px;gap:8px;padding:8px}@media(max-width:800px){.grid{grid-template-columns:1fr}#map{height:50vh}}.pin-btn{padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;text-align:left}.pin-btn:hover{border-color:#2563eb}.pin-btn.active{border:2px solid #111;background:#f8fafc}</style></head><body>
+<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth){location.href='/login'} if(auth.role!=='patroller'){location.href='/clients'}</script>
+<div class="nav"><div><b>🛡️ PATROLLERS PORTAL</b><br><span style="font-size:10px;color:#94a3b8" id="guardEmail"></span></div><div style="display:flex;gap:8px;align-items:center"><span style="font-size:10px;background:#16a34a;padding:4px 10px;border-radius:12px">● TRACE CLIENTS LIVE</span><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:0;background:#fff;color:#111">Logout</button></div></div>
+<div class="grid">
+<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px"><b id="mapTitle" style="font-size:13px">Tap 📍 pin to fly to client - Zoom 20 sees roofs</b><div style="display:flex;gap:4px"><select id="layerSelect" style="padding:6px 10px;border-radius:8px;font-size:12px;border:1px solid #ddd"><option value="satellite">Satellite - see houses</option><option value="topo">Topographic</option><option value="street">Street</option></select><button onclick="map.setZoom(19)" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd;background:#fff;font-size:10px">19</button><button onclick="map.setZoom(20)" style="padding:6px 8px;border-radius:6px;border:0;background:#111;color:#fff;font-size:10px">20 Roof</button><button onclick="map.setZoom(21)" style="padding:6px 8px;border-radius:6px;border:1px solid #2563eb;background:#ede9fe;font-size:10px">21 SUPER</button></div></div><div id="map"></div></div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div class="card"><h4 style="margin:0;font-size:13px">📍 All Clients Pins - Tap to Track</h4><div style="font-size:10px;color:#888;margin:4px 0">Tap pin → map flies to client → blue trail</div><div id="clientList" style="max-height:420px;overflow-y:auto"></div><div id="trailBox" style="margin-top:8px;font-size:11px;background:#f8fafc;padding:8px;border-radius:8px">Select client pin → trail</div></div>
+<div class="card"><h4 style="margin:0;font-size:13px">🚨 Live SOS</h4><div id="sosFeed" style="font-size:12px;max-height:200px;overflow-y:auto;margin-top:6px"></div></div>
 </div>
-
-<div class="bar">
-<b>Tap 📍 pin - See 5min video</b>
-<select class="select" id="mapType" onchange="changeMap()">
-<option>Google HD - CLEAR</option>
-<option>OpenStreetMap</option>
-</select>
-<button class="btns black">20</button><button class="btns blue">21</button>
 </div>
-
-<div id="map"></div>
-
-<div class="card blue" id="videoCard">
-<b>🎥 T780 - 5 MIN Videos Live</b><br>
-<span class="small">Newest first - tap to track + WhatsApp</span>
-<div id="videos" style="margin-top:8px;font-weight:600">No 5min videos yet</div>
-</div>
-
-<div class="card" id="clientCard">
-<b>📍 Client Pins - Tap</b>
-<div id="clients">No clients</div>
-<div style="margin-top:10px;background:#f8fafc;padding:10px;border-radius:10px;font-size:13px" id="selected">Select pin</div>
-</div>
-
 <script>
-let auth=JSON.parse(localStorage.getItem('zondi_auth')||'{}');
-document.getElementById('uEmail').innerText=auth.email||'mkhwanazig33@gmail.com';
-
-let map=L.map('map',{zoomControl:false}).setView([-25.6085,27.9802],16);
-let osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21});
-let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21});
-sat.addTo(map);
-L.control.zoom({position:'topleft'}).addTo(map);
-
-function changeMap(){
- let v=document.getElementById('mapType').value;
- if(v.includes('Google')){map.removeLayer(osm);sat.addTo(map);}
- else{map.removeLayer(sat);osm.addTo(map);}
-}
-
-let markers=[];
-async function load(){
- try{
-  let r=await fetch('/api/sos-feed'); let data=await r.json();
-  let cList=document.getElementById('clients');
-  if(!data.length){cList.innerText='No clients';}
-  else{
-   cList.innerHTML=data.map((x,i)=>`<div onclick="focusPin(${i})" style="padding:8px;border-bottom:1px solid #eee;cursor:pointer">
-   ${x.sos?'🚨 <b style=color:#dc2626>SOS</b> - ':''}<b>${x.name||x.email}</b> - ${x.time||''}<br>
-   <span style="font-size:11px;color:#666">${x.lat.toFixed(5)}, ${x.lng.toFixed(5)}</span></div>`).join('');
-  }
-  // clear old markers
-  markers.forEach(m=>map.removeLayer(m)); markers=[];
-  data.forEach((x,i)=>{
-   if(!x.lat) return;
-   let m=L.marker([x.lat,x.lng]).addTo(map).bindPopup(`<b>${x.name}</b><br>${x.sos?'🚨 SOS':''}<br><a href="https://wa.me/?text=Help at ${x.lat},${x.lng}" target="_blank">WhatsApp</a>`);
-   m.on('click',()=>focusPin(i));
-   markers.push(m);
+document.getElementById('guardEmail').innerText = auth.email+' • PATROLLER';
+let map = L.map('map',{maxZoom:22}).setView([-25.5851,28.0],16);
+let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19});
+let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22,maxNativeZoom:19}).addTo(map);
+let topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:17});
+let cur=sat;
+document.getElementById('layerSelect').onchange=e=>{map.removeLayer(cur); cur=e.target.value=='satellite'?sat.addTo(map):e.target.value=='topo'?topo.addTo(map):street.addTo(map);};
+let markers={}; let poly=null; let activeId=null;
+function pinIcon(addr){ return L.divIcon({html:`<div style="background:#111;color:#fff;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)">📍 ${addr.slice(0,22)}</div>`, className:'', iconAnchor:[20,20]});}
+function loadAll(){
+ fetch('/api/sos-feed').then(r=>r.json()).then(list=>{
+  fetch('/api/users').then(r=>r.json()).then(users=>{
+    let uniq={}; list.forEach(e=>{if(e.phoneId) uniq[e.phoneId]=e});
+    Object.values(uniq).forEach(u=>{
+      let found = users.find(x=>x.email==u.email || x.phoneId==u.phoneId);
+      if(found && found.address) u.address=found.address;
+      if(found && found.shop) u.shopName=found.shop;
+      if(found && found.name) u.clientName=found.name;
+    });
+    document.getElementById('clientList').innerHTML = Object.values(uniq).map(e=>{
+      let name = e.clientName||e.name||e.shop||'Client';
+      let addr = e.address||'No address';
+      let shop = e.shopName||e.shop||'';
+      let isSOS = e.type && e.type.includes('SOS');
+      return `<div class="pin-btn ${activeId==e.phoneId?'active':''}" onclick="flyToClient('${e.phoneId}')" style="${isSOS?'background:#fef2f2;border-color:#fca5a5':''}"><div style="font-weight:800">📍 ${name} - ${addr}</div><div style="font-size:11px;color:#666">${shop} • ${e.phoneId}</div><div style="font-size:10px;color:${isSOS?'#e11d48':'#2563eb'}">${isSOS?'🚨 SOS - TAP TO TRACK':(e.lat?.toFixed(5)||'')+' ▶ TAP PIN TO TRACK'}</div></div>`;
+    }).join('') || '<div style="font-size:12px;color:#888">No clients yet - open /clients on client phone</div>';
+    Object.values(uniq).forEach(e=>{
+      if(e.lat&&e.lng){
+        let label = `${e.clientName||''} - ${e.address||''}`.slice(0,30);
+        if(!markers[e.phoneId]){
+          markers[e.phoneId]=L.marker([e.lat,e.lng],{icon: pinIcon(label)}).addTo(map);
+          markers[e.phoneId].on('click',()=>flyToClient(e.phoneId));
+          markers[e.phoneId].bindPopup(`<b>📍 ${e.clientName||'Client'}</b><br>${e.shopName||e.shop||''}<br>${e.address||''}<br><span style="font-size:11px">${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</span><br><button onclick="flyToClient('${e.phoneId}')" style="margin-top:6px;padding:6px 10px;background:#111;color:#fff;border:0;border-radius:8px">Track blue trail</button>`);
+        } else { markers[e.phoneId].setLatLng([e.lat,e.lng]); }
+      }
+    });
+    document.getElementById('sosFeed').innerHTML = list.slice(-15).reverse().map(e=>`<div onclick="flyToClient('${e.phoneId}')" style="padding:6px;border-bottom:1px solid #eee;cursor:pointer"><b style="color:#e11d48">${e.type}</b> 📍${e.clientName||''} ${e.address||''}<br><span style="font-size:10px;color:#666">${e.time?.slice(11,19)} ${e.phoneId}</span></div>`).join('')||'No SOS';
   });
- }catch(e){console.log(e)}
-}
-function focusPin(i){
- fetch('/api/sos-feed').then(r=>r.json()).then(data=>{
-  let x=data[i]; if(!x) return;
-  map.setView([x.lat,x.lng],19);
-  document.getElementById('selected').innerHTML=`<b>${x.name}</b> - ${x.sos?'🚨 SOS URGENT':''}<br>Lat: ${x.lat}<br>Lng: ${x.lng}<br><br>
-  <a href="https://www.google.com/maps/dir/?api=1&destination=${x.lat},${x.lng}" target="_blank" style="background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">📍 Navigate</a>
-  <a href="https://wa.me/?text=ZONDI ALERT: ${x.name} needs help at https://maps.google.com/?q=${x.lat},${x.lng}" target="_blank" style="background:#25D366;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-left:8px">WhatsApp</a>`;
  });
 }
-load(); setInterval(load,5000);
+function flyToClient(id){
+ activeId=id;
+ fetch('/api/tracking/'+id).then(r=>r.json()).then(t=>{
+  if(poly) map.removeLayer(poly);
+  if(t.length){
+    let last = t[t.length-1];
+    map.flyTo([last.lat,last.lng],20,{duration:1.2});
+    let pts=t.map(p=>[p.lat,p.lng]).filter(p=>p[0]);
+    poly=L.polyline(pts,{color:'#2563eb',weight:5}).addTo(map);
+    document.getElementById('mapTitle').innerText=`Tracing 📍 ${last.clientName||''} - ${last.address||id} - Zoom 20 roof clear`;
+    document.getElementById('trailBox').innerHTML = `<b>📍 ${last.clientName||''} - ${last.address||''}</b><br>` + t.slice(-10).reverse().map(e=>`<div>${e.time?.slice(11,19)} ${e.type} ${e.lat.toFixed(5)},${e.lng.toFixed(5)}</div>`).join('') + `<div style="margin-top:6px"><a href="https://www.google.com/maps?q=${last.lat},${last.lng}" target="_blank" style="color:#2563eb;font-weight:700">Open in Google Maps</a></div>`;
+  }
+  loadAll();
+ });
+}
+setInterval(loadAll,4000); loadAll();
 </script>
-</body>
-</html>
+</body></html>
