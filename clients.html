@@ -1,96 +1,63 @@
-let auth = JSON.parse(localStorage.getItem('zondi_auth')||'null');
-if(!auth){ location.href='/login'; }
 <!DOCTYPE html><html><head>
-<title>Zondi Client - 92% SAFE</title>
+<title>Clients Portal - Zondi</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body{font-family:system-ui;margin:0;background:#f3f4f6} .card{background:#fff;margin:12px;border-radius:16px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.1)} #map{height:380px;border-radius:12px} .leaflet-control{font-size:11px}</style>
+<style>body{font-family:system-ui;margin:0;background:#f8fafc}.nav{padding:12px 20px;display:flex;justify-content:space-between;background:#fff;border-bottom:1px solid #eee;position:sticky;top:0}.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}#map{height:320px;border-radius:12px}</style>
 </head><body>
+<script>
+// AUTH GUARD - must login first
+let auth = JSON.parse(localStorage.getItem('zondi_auth')||'null');
+if(!auth){ location.href='/login'; }
+if(auth.role!=='client'){ alert('You are Patroller - going to Patrollers Portal'); location.href='/patrollers'; }
+</script>
 
-<div class="card" style="text-align:center">
+<div class="nav">
+<div><b style="color:#2563eb">CLIENTS PORTAL</b><br><span style="font-size:10px;color:#888" id="userEmail">Shop Owner</span></div>
+<div style="display:flex;gap:8px"><a href="/shop" style="font-size:12px;text-decoration:none;color:#333">Shop</a><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid #ddd;background:#fff">Logout</button></div>
+</div>
+
+<div class="card" style="text-align:center;background:linear-gradient(to bottom,#fff,#f0fdf4)">
 <div style="font-size:36px;font-weight:900;color:#16a34a">92% SAFE</div>
-<div>Shop 4B Armed • <span id="guardTxt">3 guards near</span></div>
-<div style="font-size:12px;color:#666">Tracking: 🟢 ON - ping 2min • ID: <span id="myId"></span></div>
+<div style="font-size:13px">Shop <span id="shopId">4B</span> Armed • <span id="guardNear">3 guards near you</span></div>
+<div style="font-size:11px;color:#666">ID: <span id="myId"></span> • Tracking: 🟢 ON</div>
+</div>
+
+<div class="card" style="text-align:center;border:2px solid #111">
+<div style="font-weight:800;font-size:14px">EMERGENCY? (CLIENT ONLY)</div>
+<button id="sosBtn" style="width:100%;padding:18px;background:#111;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP<br><span style="font-size:11px;font-weight:400">Silent - Guards track you</span></button>
+<div style="font-size:10px;color:#666;margin-top:6px">This SOS goes to Patrollers Portal live</div>
 </div>
 
 <div class="card">
-<div style="font-weight:700;text-align:center">EMERGENCY?</div>
-<button id="sosBtn" style="width:100%;padding:20px;background:#000;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP<br><span style="font-size:12px;font-weight:400">Silent + Tracking</span></button>
-<div style="font-size:11px;color:#666;text-align:center;margin-top:6px">No siren - we track phone if taken</div>
+<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #f1f5f9"><span>🔒 Shop Armed</span><b id="armed">ON - 18:32</b></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #f1f5f9"><span>👮 Nearest Guard</span><span id="nearest">Sipho - 120m</span></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0"><span>📍 My Location</span><span id="lastLoc" style="font-size:11px">waiting GPS...</span></div>
+<div style="display:flex;gap:8px;margin-top:10px"><button onclick="toggleArm()" style="flex:1;padding:10px;border-radius:10px;border:0;background:#ede9fe;font-weight:700">Arm/Disarm</button><button onclick="window.location.href='tel:10111'" style="flex:1;padding:10px;border-radius:10px;border:1px solid #ddd;background:#fff">Call Guard</button></div>
 </div>
 
 <div class="card">
-<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-bottom:1px solid #eee"><span>🔒 Shop Armed</span><span id="armedTime">ON</span></div>
-<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-bottom:1px solid #eee"><span>👮 Nearest Guard</span><span id="nearest">Sipho 120m • 2m ago</span></div>
-<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0"><span>📍 Last Location</span><span id="lastLoc">waiting GPS</span></div>
-<button onclick="toggleArm()" style="width:100%;margin-top:8px;background:#ede9fe;border:0;padding:10px;border-radius:12px;font-weight:700">Arm / Disarm Shop</button>
-</div>
-
-<div class="card">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-<b>MAP: Shop 📍 + 3 guards</b>
-<select id="layerSelect" style="padding:4px 8px;border-radius:8px;border:1px solid #ddd;font-size:12px"><option value="street">Street</option><option value="satellite">Satellite (Houses)</option><option value="topo">Topographic</option></select>
-</div>
+<div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="font-size:13px">My Shop Map - Where guards find me</b><select id="layerSelect" style="padding:4px;border-radius:8px;font-size:11px"><option value="street">Street</option><option value="satellite">Satellite - see my roof</option><option value="topo">Topographic</option></select></div>
 <div id="map"></div>
-<div style="font-size:11px;color:#666;margin-top:6px">Topo = contours / Satellite = see roofs clearly. Patrollers trace you live from /patrollers</div>
-<div style="display:flex;gap:8px;margin-top:10px">
-<button onclick="window.location.href='tel:10111'" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:12px;background:#fff">Call Guard</button>
-<button onclick="window.location.href='/sos'" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:12px;background:#fff">Open /sos</button>
-</div>
-</div>
-
-<div class="card">
-<div style="display:flex;justify-content:space-between"><b>🛰️ Always-on tracking</b><span><input type="checkbox" id="trackToggle" checked> ON</span></div>
-<div style="font-size:11px;color:#666">Uses ~50MB/day. Keeps trail even if you don't press SOS. If phone off/erased, we keep last 20 points. Hide T780 device for backup tracker.</div>
+<div style="font-size:10px;color:#666;margin-top:4px">CLIENT view only - you see only your shop. Patrollers see ALL shops.</div>
 </div>
 
 <script>
-let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).slice(2,8);
+document.getElementById('userEmail').innerText = auth.email + ' • CLIENT';
+let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).slice(2,6);
 localStorage.setItem('zondi_id', phoneId);
 document.getElementById('myId').innerText = phoneId;
-
-// MAP LAYERS - TOPO + SATELLITE
-let map = L.map('map').setView([-25.6242, 28.0038], 17);
-let street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
-let satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri Satellite'});
-let topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{attribution:'OpenTopoMap'});
-let currentLayer = street;
-document.getElementById('layerSelect').onchange = e=>{
-  map.removeLayer(currentLayer);
-  if(e.target.value=='satellite') currentLayer=satellite.addTo(map);
-  else if(e.target.value=='topo') currentLayer=topo.addTo(map);
-  else currentLayer=street.addTo(map);
-};
-
-let shopMarker = L.marker([-25.6242,28.0038]).addTo(map).bindPopup('Shop 4B - Armed');
-let meMarker = null;
-
-function updateLocation(pos){
-  let lat=pos.coords.latitude, lng=pos.coords.longitude;
-  document.getElementById('lastLoc').innerText = lat.toFixed(5)+', '+lng.toFixed(5);
-  if(!meMarker) meMarker=L.marker([lat,lng],{icon:L.divIcon({html:'📱',className:''})}).addTo(map);
-  else meMarker.setLatLng([lat,lng]);
-  shopMarker.setLatLng([lat,lng]); // center shop to you for demo
-
-  if(document.getElementById('trackToggle').checked){
-    fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId, shop:'Shop 4B', lat:lat, lng:lng, type:'TRACK_PING', battery:navigator.getBattery? '':''})});
-  }
-}
-navigator.geolocation.watchPosition(updateLocation, e=>console.log(e), {enableHighAccuracy:true});
-setInterval(()=>{navigator.geolocation.getCurrentPosition(updateLocation)}, 120000); // ping 2min
-
-// SOS HOLD 1.5s
-let holdTimer;
-const btn=document.getElementById('sosBtn');
-btn.addEventListener('touchstart', startHold); btn.addEventListener('mousedown', startHold);
-btn.addEventListener('touchend', cancelHold); btn.addEventListener('mouseup', cancelHold);
-function startHold(){btn.innerText='HOLDING...'; holdTimer=setTimeout(()=>{ 
-  navigator.geolocation.getCurrentPosition(pos=>{
-    fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:'Shop 4B',lat:pos.coords.latitude,lng:pos.coords.longitude,type:'CLIENT_SOS_SILENT'})}).then(()=>{btn.innerText='SENT - Ghost Mode'; btn.style.background='#16a34a'; document.getElementById('armedTime').innerText='SOS SENT '+new Date().toLocaleTimeString();});
-  });
-},1500);}
-function cancelHold(){clearTimeout(holdTimer); if(btn.innerText.includes('HOLDING')) btn.innerText='HOLD 1.5s FOR HELP\nSilent + Tracking';}
-function toggleArm(){let t=document.getElementById('armedTime'); t.innerText=t.innerText.includes('ON')?'OFF':'ON - '+new Date().toLocaleTimeString().slice(0,5)+' Today';}
+let map = L.map('map').setView([-25.6242,28.0038],17);
+let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+let topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
+let cur=street;
+document.getElementById('layerSelect').onchange=e=>{map.removeLayer(cur); cur=e.target.value=='satellite'?sat.addTo(map):e.target.value=='topo'?topo.addTo(map):street.addTo(map);};
+let meMarker=null;
+function upd(pos){let lat=pos.coords.latitude,lng=pos.coords.longitude; document.getElementById('lastLoc').innerText=lat.toFixed(5)+','+lng.toFixed(5); if(!meMarker) meMarker=L.marker([lat,lng]).addTo(map).bindPopup('My Shop'); else meMarker.setLatLng([lat,lng]); fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:'Shop 4B',lat:lat,lng:lng,type:'CLIENT_PING'})});}
+navigator.geolocation.watchPosition(upd,null,{enableHighAccuracy:true});
+let hold; let btn=document.getElementById('sosBtn');
+btn.addEventListener('touchstart',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:'Shop 4B',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS'})}).then(()=>{btn.innerText='SOS SENT - Guards coming'; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('touchend',()=>clearTimeout(hold));
+function toggleArm(){let a=document.getElementById('armed'); a.innerText=a.innerText.includes('ON')?'OFF':'ON - '+new Date().toLocaleTimeString().slice(0,5);}
 </script>
 </body></html>
