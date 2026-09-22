@@ -1,3 +1,5 @@
+let auth = JSON.parse(localStorage.getItem('zondi_auth')||'null');
+if(!auth){ location.href='/login'; }
 <!DOCTYPE html>
 <html><head>
 <title>Patrollers Portal - Zondi</title>
