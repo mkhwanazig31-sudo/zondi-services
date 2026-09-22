@@ -1,72 +1,26 @@
-<!DOCTYPE html><html><head><title>Clients Portal - 5min</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body{margin:0;font-family:system-ui;background:#fff}.app{max-width:420px;margin:0 auto;min-height:100vh;background:#f8fafc;box-shadow:0 0 0 1px #eee;display:flex;flex-direction:column}.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#fff;border-bottom:1px solid #eee;position:sticky;top:0;z-index:10}.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:10px 12px}#map{height:340px;border-radius:12px}</style></head><body>
-<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth){location.href='/login'} if(auth.role!=='client'){location.href='/patrollers'}</script>
-<div class="app">
-<div class="nav"><div><b style="color:#2563eb">CLIENTS PORTAL - 5MIN</b><br><span style="font-size:10px;color:#888" id="userEmail"></span><br><span style="font-size:11px" id="myPin"></span></div><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid #ddd;background:#fff">Logout</button></div>
+// Use HIGH accuracy + allow drag correction
+let savedPin = null;
 
-<div class="card" style="text-align:center;background:linear-gradient(#fff,#f0fdf4)"><div style="font-size:32px;font-weight:900;color:#16a34a">92% SAFE</div><div style="font-size:13px" id="shopInfo"></div><div style="font-size:11px;color:#666">ID: <span id="myId"></span> • <span id="lastLoc">waiting GPS...</span></div><button onclick="startGPS()" style="margin-top:8px;width:100%;padding:8px;border-radius:10px;border:1px solid #111;background:#fff;font-size:12px">🔄 Retry GPS</button></div>
-
-<div class="card" style="text-align:center;border:2px solid #111"><b>EMERGENCY</b><button id="sosBtn" style="width:100%;padding:18px;background:#111;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP</button><div style="font-size:10px;color:#666;margin-top:6px" id="addrShow"></div></div>
-
-<div class="card" style="border:2px solid #2563eb"><b>🎥 T780 / 5 MINUTE RECORD</b><br><span style="font-size:11px;color:#666">Record intruder 5min - auto uploads to patrollers with 📍 + WhatsApp</span>
-<div style="display:flex;gap:8px;margin-top:10px">
-<button onclick="document.getElementById('vidInput').click()" style="flex:1;padding:12px;background:#fff;border:1px solid #ddd;border-radius:10px;font-weight:700;font-size:12px">📁 Upload CCTV</button>
-<button onclick="startRecord()" id="recBtn" style="flex:1;padding:12px;background:#e11d48;color:#fff;border:0;border-radius:10px;font-weight:700;font-size:12px">● REC 5 MIN</button>
-<button onclick="stopRecord()" id="stopBtn" style="display:none;flex:1;padding:12px;background:#111;color:#fff;border:0;border-radius:10px;font-weight:700;font-size:12px">■ STOP & SEND</button>
-</div>
-<input type="file" id="vidInput" accept="video/*" style="display:none">
-<video id="preview" style="width:100%;border-radius:10px;margin-top:10px;display:none" controls muted playsinline></video>
-<div style="display:flex;justify-content:space-between;margin-top:6px"><div id="upStatus" style="font-size:11px;color:#666"></div><div id="timer" style="font-size:12px;font-weight:800;color:#e11d48"></div></div>
-</div>
-
-<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="font-size:12px">My 📍 Pin</b><div style="display:flex;gap:4px"><button onclick="map.setZoom(20)" style="padding:4px 8px;border-radius:6px;border:0;background:#111;color:#fff;font-size:10px">20 Roof</button><button onclick="map.setZoom(21)" style="padding:4px 8px;border-radius:6px;border:1px solid #2563eb;background:#ede9fe;font-size:10px">21 HD</button></div></div><div id="map"></div></div>
-</div>
-
-<script>
-let myAddr = localStorage.getItem('zondi_address')||auth.address||'No address';
-let myShop = localStorage.getItem('zondi_shopname')||'Shop';
-document.getElementById('userEmail').innerText = auth.email;
-document.getElementById('myPin').innerHTML = `📍 ${auth.name||''} - ${myAddr}`;
-document.getElementById('shopInfo').innerText = `${myShop} - ${myAddr}`;
-document.getElementById('addrShow').innerText = `📍 ${myAddr}`;
-let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).slice(2,6);
-localStorage.setItem('zondi_id', phoneId);
-document.getElementById('myId').innerText = phoneId;
-
-let map = L.map('map',{maxZoom:22}).setView([-25.585,28.03],18);
-let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19}).addTo(map);
-let sat=L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{maxZoom:22,maxNativeZoom:20});
-let meMarker=null; let statusEl=document.getElementById('lastLoc');
-function showGPS(lat,lng,acc){ statusEl.innerHTML=lat.toFixed(5)+','+lng.toFixed(5)+' • '+Math.round(acc)+'m'; statusEl.style.color='#16a34a'; if(!meMarker){ meMarker=L.marker([lat,lng]).addTo(map).bindPopup(`📍 ${auth.name||''}<br>${myShop}<br>${myAddr}`); map.setView([lat,lng],19);} else meMarker.setLatLng([lat,lng]); fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:lat,lng:lng,type:'CLIENT_PING',email:auth.email})});}
-function gpsError(err){ statusEl.innerHTML = err.code==1?'❌ BLOCKED - Tap 🔒 → Allow':'📡 No signal'; statusEl.style.color='#e11d48';}
-function startGPS(){ statusEl.innerHTML='⌛ Asking...'; navigator.geolocation.getCurrentPosition(p=>{showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy); navigator.geolocation.watchPosition(p=>showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy),gpsError,{enableHighAccuracy:true,maximumAge:0,timeout:15000});},gpsError,{enableHighAccuracy:true,timeout:15000});}
-startGPS();
-let hold; let btn=document.getElementById('sosBtn');
-btn.addEventListener('touchstart',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',email:auth.email})}).then(()=>{btn.innerText='SOS SENT + 📍'; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('touchend',()=>clearTimeout(hold));
-
-// VIDEO 5 MIN
-let mediaRec=null; let chunks=[]; let timerInt=null; let recStart=null;
-document.getElementById('vidInput').onchange = e=>{ uploadFile(e.target.files[0]); }
-function uploadFile(file){
-  if(!file) return;
-  let fd = new FormData(); fd.append('video', file); fd.append('phoneId', phoneId); fd.append('address', myAddr); fd.append('shop', myShop); fd.append('name', auth.name||'');
-  navigator.geolocation.getCurrentPosition(p=>{ fd.append('lat', p.coords.latitude); fd.append('lng', p.coords.longitude); doUpload(fd,file); }, ()=>doUpload(fd,file));
+function initMap() {
+  navigator.geolocation.getCurrentPosition(pos => {
+    let lat = pos.coords.latitude;
+    let lng = pos.coords.longitude;
+    // Check if user already corrected pin
+    let corrected = JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
+    if(corrected){ lat = corrected.lat; lng = corrected.lng; }
+    
+    map.setView([lat,lng], 19);
+    
+    // Draggable marker - client can drag to correct house
+    savedPin = L.marker([lat,lng], {draggable:true}).addTo(map)
+      .bindPopup("Drag me to your EXACT gate - then Save")
+      .openPopup();
+      
+    savedPin.on('dragend', e => {
+      let p = e.target.getLatLng();
+      localStorage.setItem('zondi_corrected_pin', JSON.stringify({lat:p.lat, lng:p.lng}));
+      localStorage.setItem('zondi_address', p.lat+','+p.lng); // save exact, not street name
+      fetch('/api/sos', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email: localStorage.getItem('zondi_email'), lat:p.lat, lng:p.lng, corrected:true })})
+    });
+  }, null, {enableHighAccuracy:true, maximumAge:0, timeout:10000});
 }
-function doUpload(fd,file){
-  document.getElementById('upStatus').innerText='⏳ Uploading '+ (file.size/1024/1024).toFixed(1)+'MB - 5min takes ~30sec...';
-  document.getElementById('preview').style.display='block'; document.getElementById('preview').src=URL.createObjectURL(file); document.getElementById('preview').controls=true;
-  fetch('/api/upload-video',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{ if(d.ok) document.getElementById('upStatus').innerHTML='✅ 5MIN SENT to patrollers! 📍 '+myAddr; else document.getElementById('upStatus').innerText='❌ '+d.error; });
-}
-function startRecord(){
-  navigator.mediaDevices.getUserMedia({video:true,audio:true}).then(stream=>{
-    let preview=document.getElementById('preview'); preview.style.display='block'; preview.srcObject=stream; preview.muted=true; preview.play();
-    chunks=[]; mediaRec=new MediaRecorder(stream,{mimeType:'video/webm'}); mediaRec.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
-    mediaRec.onstop=()=>{ let blob=new Blob(chunks,{type:'video/webm'}); let file=new File([blob], '5min_'+Date.now()+'.webm',{type:'video/webm'}); uploadFile(file); stream.getTracks().forEach(t=>t.stop()); clearInterval(timerInt); document.getElementById('timer').innerText=''; document.getElementById('recBtn').style.display='block'; document.getElementById('stopBtn').style.display='none'; document.getElementById('recBtn').innerText='● REC 5 MIN'; };
-    mediaRec.start(1000); recStart=Date.now();
-    document.getElementById('recBtn').innerText='● Recording...'; document.getElementById('recBtn').style.display='none'; document.getElementById('stopBtn').style.display='block';
-    timerInt=setInterval(()=>{ let elapsed=Math.floor((Date.now()-recStart)/1000); let remain=300-elapsed; let m=Math.floor(remain/60); let s=remain%60; document.getElementById('timer').innerText=`${m}:${s.toString().padStart(2,'0')} left / 5:00`; if(remain<=0) stopRecord(); },1000);
-  }).catch(err=>alert('Camera blocked - use Upload: '+err));
-}
-function stopRecord(){ if(mediaRec && mediaRec.state!=='inactive'){ mediaRec.stop(); document.getElementById('upStatus').innerText='⏳ Processing 5min video...'; } }
-</script>
-</body></html>
