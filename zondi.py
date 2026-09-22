@@ -17,8 +17,12 @@ def load_json(f):
 def save_json(f, data):
     with open(f,'w') as fh: json.dump(fh, data, indent=2)
 
+# FIX NOT FOUND - serve files correctly
 @app.route('/')
-def home(): return send_from_directory('.', 'index.html')
+def home():
+    if os.path.exists('index.html'):
+        return send_from_directory('.', 'index.html')
+    return "Zondi Services - API Running. Go to /clients or /patrollers", 200
 
 @app.route('/login')
 def login_page(): return send_from_directory('.', 'login.html')
@@ -35,17 +39,24 @@ def clients_page(): return send_from_directory('.', 'clients.html')
 def patrollers_page(): return send_from_directory('.', 'patrol.html')
 
 @app.route('/shop')
-def shop_page(): return send_from_directory('.', 'shop.html')
+def shop_page():
+    if os.path.exists('shop.html'): return send_from_directory('.', 'shop.html')
+    return home()
 
 @app.route('/sos')
-def sos_page(): return send_from_directory('.', 'sos.html')
+def sos_page():
+    if os.path.exists('sos.html'): return send_from_directory('.', 'sos.html')
+    return home()
 
 @app.route('/sw.js')
 def sw(): return send_from_directory('.', 'sw.js')
 
 @app.route('/manifest.json')
-def manifest(): return send_from_directory('.', 'manifest.json')
+def manifest():
+    if os.path.exists('manifest.json'): return send_from_directory('.', 'manifest.json')
+    return jsonify({"name":"Zondi"})
 
+# API
 @app.route('/api/sos', methods=['POST'])
 def api_sos():
     data = request.json
@@ -78,9 +89,6 @@ def patroller_ping():
 @app.route('/api/patrollers-live')
 def patrollers_live(): return jsonify(load_json(PATROLLER_FILE))
 
-@app.route('/api/users')
-def api_users(): return jsonify(load_json(USERS_FILE))
-
 @app.route('/api/login', methods=['POST'])
 def api_login():
     d=request.json
@@ -96,6 +104,14 @@ def api_signup():
     users.append(d)
     save_json(USERS_FILE, users)
     return jsonify({"ok":True})
+
+# CATCH ALL - prevents Not Found screenshot
+@app.route('/<path:path>')
+def catch_all(path):
+    if os.path.exists(path):
+        return send_from_directory('.', path)
+    # if someone types /something wrong, send to login
+    return send_from_directory('.', 'login.html') if os.path.exists('login.html') else home()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0', port=10000)
