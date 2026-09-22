@@ -19,30 +19,30 @@ def save_db(db):
 def api_sos():
     data = request.get_json(force=True) or {}
     db = load_db()
-    event = {
+    evt = {
         "phoneId": data.get("phoneId","unknown"),
         "shop": data.get("shop","Shop 4B"),
         "lat": data.get("lat"), "lng": data.get("lng"),
         "type": data.get("type","CLIENT_SOS"),
+        "battery": data.get("battery"),
         "time": datetime.now().isoformat()
     }
-    db["locations"].append(event)
+    db["locations"].append(evt)
     db["locations"] = db["locations"][-1000:]
-    if "SOS" in event["type"] or "GASP" in event["type"]:
-        db["sos_events"].append(event)
-        print(f"🚨 SOS {event}")
+    if "SOS" in evt["type"] or "GASP" in evt["type"]:
+        db["sos_events"].append(evt)
+        print(f"🚨 SOS! {evt}")
     save_db(db)
-    return jsonify({"ok":True})
+    return jsonify({"ok":True, "saved":evt})
 
 @app.route("/api/tracking/<phoneId>")
 def trail(phoneId):
     db = load_db()
     return jsonify([l for l in db["locations"] if l["phoneId"]==phoneId][-20:])
 
-# --- FIXED ROUTES: serve both names so never 404 ---
 @app.route("/")
 def home():
-    return '<h3>ZONDI LIVE</h3><a href="/sos">/sos - No login SOS</a><br><a href="/clients">/clients - Dashboard</a><br><a href="/client">/client (alias)</a>'
+    return '<h3>ZONDI V9 LIVE</h3><a href="/sos">/sos - No login SOS (home screen)</a><br><a href="/clients">/clients - Dashboard</a><br><a href="/client">/client - alias</a>'
 
 @app.route("/sos")
 def sos():
@@ -52,16 +52,16 @@ def sos():
 def clients():
     return send_from_directory(".", "clients.html")
 
-@app.route("/client")  # alias for your old link
+@app.route("/client")
 def client_alias():
     return send_from_directory(".", "clients.html")
 
 @app.route("/manifest.json")
-def man():
+def manifest():
     return send_from_directory(".", "manifest.json")
 
 @app.route("/sw.js")
-def sw():
+def swjs():
     return send_from_directory(".", "sw.js")
 
 if __name__ == "__main__":
