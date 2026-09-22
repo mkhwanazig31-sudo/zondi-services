@@ -6,44 +6,140 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-html,body{margin:0;padding:0;background:#fff;font-family:system-ui}
-#map{height:75vh;width:100%;background:#eee;display:block}
-.leaflet-tile-pane{filter:none!important}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui;background:#f8f8f8}
+.top{background:#fff;padding:12px 14px;border-bottom:1px solid #eee;position:sticky;top:0;z-index:99}
+#map{height:48vh;width:100%;background:#eee}
 .leaflet-tile{filter:none!important;mix-blend-mode:normal!important}
+.btn{width:100%;padding:14px;border:0;border-radius:12px;font-weight:800;margin-top:8px}
+.sos{background:#dc2626;color:#fff;font-size:18px;box-shadow:0 4px 12px rgba(220,38,38,.3)}
+.save{background:#111;color:#fff}
+.small{background:#fff;border:1px solid #ddd;color:#111}
+.card{margin:10px;background:#fff;border-radius:14px;padding:14px;border:1px solid #eee}
+.status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:#16a34a}
 </style>
 </head>
-<body style="background:#fff">
-<div style="padding:12px;background:#fff;border-bottom:1px solid #eee">
-<b>ZONDI - Client</b> <span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:3px 8px;border-radius:10px">CLEAN v2.2</span>
-<p style="font-size:11px;color:#666;margin:4px 0">Drag red pin to exact gate if 4408 wrong → SAVE</p>
-<button onclick="saveFix()" style="width:100%;padding:14px;background:#111;color:#fff;border:0;border-radius:12px;font-weight:700">SAVE MY CORRECT HOUSE</button>
-<div id="status" style="font-size:12px;color:green;margin-top:6px"></div>
+<body>
+
+<div class="top">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<b>ZONDI - Client</b> <span style="font-size:10px;background:#dcfce7;padding:4px 8px;border-radius:10px;color:#16a34a">CLEAN v2.3 FULL</span>
 </div>
+<div style="font-size:11px;color:#666;margin-top:4px">
+<span class="status-dot" id="gpsDot"></span> <span id="gpsText">Waiting GPS permission...</span><br>
+<span id="userEmail"></span>
+</div>
+</div>
+
 <div id="map"></div>
+
+<div style="padding:12px">
+<button class="btn sos" onclick="sendSOS()">🚨 HOLD 2 SEC - SOS TO PATROL</button>
+<button class="btn save" onclick="saveFix()">📍 SAVE MY CORRECT HOUSE</button>
+<div style="display:flex;gap:8px">
+<button class="btn small" onclick="toggleShare()" id="shareBtn">🔴 Start Location Share</button>
+<button class="btn small" onclick="location.href='/shop'">🛒 Shop</button>
+</div>
+<div id="status" style="font-size:12px;color:#16a34a;margin-top:8px;min-height:16px"></div>
+</div>
+
+<div class="card">
+<b>🏪 My Shop</b>
+<div style="font-size:13px;color:#666;margin-top:6px" id="shopInfo">Loading...</div>
+<div style="margin-top:10px;display:flex;gap:8px">
+<button class="btn small" style="flex:1" onclick="testPatrol()">👁️ Test Patrol View</button>
+<button class="btn small" style="flex:1" onclick="clearData()">Logout</button>
+</div>
+</div>
+
+<div class="card">
+<b>📋 How it works</b>
+<p style="font-size:12px;color:#666">1. Accept location permission → auto sends live location to patrollers every 15 sec<br>
+2. If 4408 shows wrong house, drag pin to correct gate → SAVE<br>
+3. Hold SOS 2 sec → Patrol gets alarm + video page opens</p>
+</div>
+
 <script>
-var map = L.map('map').setView([-25.60855,27.98021],18);
+let map = L.map('map').setView([-25.60855,27.98021],18);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(map);
-var pin=null, pos=null;
-function init(){
+let pin=null, pos=null, watchId=null, sharing=false, sosTimer=null;
+
+let auth = JSON.parse(localStorage.getItem('zondi_auth')||'{}');
+document.getElementById('userEmail').innerText = auth.email || '';
+document.getElementById('shopInfo').innerHTML = `Name: ${auth.name||'-'}<br>Email: ${auth.email||'-'}<br>Address: ${auth.address||'Not set - drag pin'}`;
+
+function initGPS(){
  navigator.geolocation.getCurrentPosition(p=>{
-  var lat = p.coords.latitude, lng = p.coords.longitude;
-  var fix = JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
-  if(fix){lat=fix.lat;lng=fix.lng}
+  let fix = JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
+  let lat = fix?fix.lat:p.coords.latitude;
+  let lng = fix?fix.lng:p.coords.longitude;
   pos={lat:lat,lng:lng};
   map.setView([lat,lng],19);
   if(pin) map.removeLayer(pin);
-  pin=L.marker([lat,lng],{draggable:true}).addTo(map).bindPopup("Drag me").openPopup();
-  pin.on('dragend',e=>{var ll=e.target.getLatLng();pos={lat:ll.lat,lng:ll.lng};document.getElementById('status').innerText="New: "+ll.lat.toFixed(6)+" - Press SAVE"});
- },null,{enableHighAccuracy:true});
+  pin=L.marker([lat,lng],{draggable:true}).addTo(map);
+  pin.on('dragend',e=>{
+   let ll=e.target.getLatLng();
+   pos={lat:ll.lat,lng:ll.lng};
+   document.getElementById('status').innerText="New pin: "+ll.lat.toFixed(6)+" - Press SAVE";
+  });
+  document.getElementById('gpsDot').style.background='#16a34a';
+  document.getElementById('gpsText').innerText='GPS OK - Auto sending to patrol every 15s';
+  // AUTO SEND to patrol portal immediately after permission
+  autoSendToPatrol();
+ },err=>{
+  document.getElementById('gpsText').innerText='❌ Enable Location permission';
+  document.getElementById('gpsDot').style.background='#dc2626';
+ },{enableHighAccuracy:true,maximumAge:0,timeout:10000});
 }
+
+function autoSendToPatrol(){
+ if(!pos) return;
+ fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  email:auth.email||'client',
+  name:auth.name||'Client',
+  lat:pos.lat,lng:pos.lng,
+  address:pos.lat+','+pos.lng,
+  shopName:auth.shopName||auth.name||'Shop',
+  live:true,
+  time:new Date().toISOString()
+ })}).then(()=>{console.log('auto sent to patrol')});
+}
+
+function toggleShare(){
+ if(sharing){navigator.geolocation.clearWatch(watchId);sharing=false;document.getElementById('shareBtn').innerText='🔴 Start Location Share';return;}
+ sharing=true;
+ document.getElementById('shareBtn').innerText='🟢 Sharing LIVE...';
+ watchId=navigator.geolocation.watchPosition(p=>{
+  pos={lat:p.coords.latitude,lng:p.coords.longitude};
+  autoSendToPatrol();
+ },{},{enableHighAccuracy:true});
+ setInterval(autoSendToPatrol,15000);
+}
+
 function saveFix(){
- if(!pos) return alert("Wait GPS");
+ if(!pos) return alert('Wait GPS');
  localStorage.setItem('zondi_corrected_pin',JSON.stringify(pos));
- var auth=JSON.parse(localStorage.getItem('zondi_auth')||'{}');
- fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:auth.email||'client',lat:pos.lat,lng:pos.lng,address:pos.lat+','+pos.lng,corrected:true})})
- .then(()=>{document.getElementById('status').innerText="✅ SAVED! No more wrong house"});
+ autoSendToPatrol();
+ document.getElementById('status').innerText='✅ SAVED! Patrol now sees correct house';
 }
-init();
+
+function sendSOS(){
+ document.getElementById('status').innerText='🚨 Sending SOS to patrollers...';
+ fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  email:auth.email,lat:pos.lat,lng:pos.lng,address:pos.lat+','+pos.lng,sos:true,urgent:true,time:new Date().toISOString()
+ })}).then(()=>{document.getElementById('status').innerText='✅ SOS SENT! Patrollers alerted - check patrol portal';});
+}
+
+// Hold 2 sec for SOS
+let btn=document.querySelector('.sos');
+btn.addEventListener('touchstart',e=>{sosTimer=setTimeout(sendSOS,2000)});
+btn.addEventListener('touchend',e=>{clearTimeout(sosTimer)});
+
+function testPatrol(){window.open('/patrollers','_blank')}
+function clearData(){localStorage.clear();location.href='/login'}
+
+initGPS();
+setInterval(autoSendToPatrol,15000);
 </script>
 </body>
 </html>
