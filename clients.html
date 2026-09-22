@@ -1,102 +1,42 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:#fff;display:flex;flex-direction:column;min-height:100vh}
-.top{padding:18px;text-align:center;border-bottom:1px solid #f0f0f0}
-.center{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px}
-.sos{width:220px;height:220px;border-radius:50%;border:0;background:#dc2626;color:#fff;font-weight:900;font-size:26px;box-shadow:0 12px 30px rgba(220,38,38,.4)}
-.small{font-size:12px;color:#888;margin-top:18px;text-decoration:underline;background:none;border:0}
-.dot{font-size:11px}
-#fix{width:100%;display:none;margin-top:20px}
-#fixMap{height:40vh;width:100%;border-radius:16px}
-</style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-</head>
-<body>
-<div class="top">
-<b id="name">ZONDI</b><br>
-<span class="dot" id="gps" style="color:#f59e0b">● Getting location...</span>
-<div id="debug" style="font-size:10px;color:#999;margin-top:4px"></div>
-</div>
-<div class="center">
-<button class="sos" id="sosBtn">SOS<br><span style="font-size:14px">HOLD 2 SEC</span></button>
-<div id="msg" style="margin-top:16px;font-size:14px;color:#16a34a;height:20px"></div>
-<button class="small" onclick="openFix()">My SOS goes to wrong house? Fix it</button>
-<div id="fix"><div id="fixMap"></div><button onclick="save()" style="width:100%;margin-top:10px;padding:14px;border-radius:12px;border:0;background:#111;color:#fff;font-weight:700">SAVE CORRECT HOUSE</button></div>
-<button class="small" onclick="localStorage.clear();location.href='/login'">Logout</button>
+<!DOCTYPE html><html><head><title>Clients Portal</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{margin:0;font-family:system-ui;background:#fff}.app{max-width:420px;margin:0 auto;min-height:100vh;background:#f8fafc;box-shadow:0 0 0 1px #eee;display:flex;flex-direction:column}.nav{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#fff;border-bottom:1px solid #eee;position:sticky;top:0;z-index:10}.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:10px 12px}#map{height:360px;border-radius:12px}</style></head><body>
+<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth){location.href='/login'} if(auth.role!=='client'){location.href='/patrollers'}</script>
+<div class="app">
+<div class="nav"><div><b style="color:#2563eb">CLIENTS PORTAL</b><br><span style="font-size:10px;color:#888" id="userEmail"></span><br><span style="font-size:11px" id="myPin"></span></div><button onclick="localStorage.removeItem('zondi_auth');location.href='/login'" style="font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid #ddd;background:#fff">Logout</button></div>
+<div class="card" style="text-align:center;background:linear-gradient(#fff,#f0fdf4)"><div style="font-size:32px;font-weight:900;color:#16a34a">92% SAFE</div><div style="font-size:13px" id="shopInfo"></div><div style="font-size:11px;color:#666">ID: <span id="myId"></span> • <span id="lastLoc">waiting GPS...</span></div>
+<button onclick="startGPS()" style="margin-top:8px;width:100%;padding:8px;border-radius:10px;border:1px solid #111;background:#fff;font-size:12px">🔄 Retry GPS</button></div>
+<div class="card" style="text-align:center;border:2px solid #111"><b>EMERGENCY</b><button id="sosBtn" style="width:100%;padding:18px;background:#111;color:#fff;border-radius:999px;border:0;font-weight:800;font-size:18px;margin-top:8px">HOLD 1.5s FOR HELP</button><div style="font-size:10px;color:#666;margin-top:6px" id="addrShow"></div></div>
+<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="font-size:12px">My 📍 Pin - Guards see this</b><div style="display:flex;gap:4px"><button onclick="map.setZoom(19)" style="padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff;font-size:10px">19</button><button onclick="map.setZoom(20)" style="padding:4px 8px;border-radius:6px;border:0;background:#111;color:#fff;font-size:10px">20 Roof</button><button onclick="map.setZoom(21)" style="padding:4px 8px;border-radius:6px;border:1px solid #2563eb;background:#ede9fe;font-size:10px">21 SUPER</button></div></div><div id="map"></div></div>
+<div style="margin-top:auto;padding:12px;display:flex;gap:8px;background:#fff;border-top:1px solid #eee"><a href="/" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:11px">Home</a><a href="/shop" style="flex:1;text-align:center;text-decoration:none;color:#666;font-size:11px">Shop</a><a href="/sos" style="flex:1;text-align:center;text-decoration:none;color:#e11d48;font-size:11px;font-weight:700">SOS</a></div>
 </div>
 <script>
-let auth=JSON.parse(localStorage.getItem('zondi_auth')||'{}');
-document.getElementById('name').innerText=auth.email||'ZONDI';
-let pos=null,map=null,pin=null;
-
-function log(t){document.getElementById('debug').innerText=t; console.log(t);}
-
-async function send(isSOS){
- if(!pos){log('No GPS yet'); return;}
- let payload={
-  email: auth.email || 'mkhwanazig31@gmail.com',
-  name: auth.name || auth.email,
-  lat: parseFloat(pos.lat),
-  lng: parseFloat(pos.lng),
-  latitude: parseFloat(pos.lat),
-  longitude: parseFloat(pos.lng),
-  address: pos.lat+','+pos.lng,
-  shopName: auth.name||'Client',
-  sos: isSOS?true:false,
-  live: true,
-  time: new Date().toISOString()
- };
- log(`Sending ${isSOS?'SOS':''} ${payload.lat.toFixed(5)},${payload.lng.toFixed(5)} to patrol...`);
- try{
-  let r = await fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  let j = await r.json();
-  log(`✅ Sent! Patrol should see you now`);
-  if(isSOS) document.getElementById('msg').innerText='✅ Patrol coming! Stay inside';
-  else document.getElementById('msg').innerText='📍 Live location shared with patrol';
- }catch(e){
-  log('❌ Failed: '+e.message+' - check /api/sos');
- }
+let myAddr = localStorage.getItem('zondi_address')||auth.address||'No address set';
+let myShop = localStorage.getItem('zondi_shopname')||'Shop';
+document.getElementById('userEmail').innerText = auth.email;
+document.getElementById('myPin').innerHTML = `📍 ${auth.name||'Gontse'} - ${myAddr}`;
+document.getElementById('shopInfo').innerText = `${myShop} - ${myAddr}`;
+document.getElementById('addrShow').innerText = `📍 ${myAddr} - this address sent to patrollers`;
+let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).slice(2,6);
+localStorage.setItem('zondi_id', phoneId);
+document.getElementById('myId').innerText = phoneId;
+let map = L.map('map',{maxZoom:22}).setView([-25.5851,28.0],18);
+let street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19}).addTo(map);
+let sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22,maxNativeZoom:19});
+let topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:17});
+let meMarker=null;
+let statusEl=document.getElementById('lastLoc');
+function showGPS(lat,lng,acc){
+  statusEl.innerHTML=lat.toFixed(5)+','+lng.toFixed(5)+' • '+Math.round(acc)+'m';
+  statusEl.style.color='#16a34a';
+  if(!meMarker){ meMarker=L.marker([lat,lng]).addTo(map).bindPopup(`📍 ${auth.name||''}<br>${myShop}<br>${myAddr}<br>${lat.toFixed(5)},${lng.toFixed(5)}`); map.setView([lat,lng],20); }
+  else meMarker.setLatLng([lat,lng]);
+  fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:lat,lng:lng,type:'CLIENT_PING',email:auth.email})});
 }
-
-function init(){
- if(!navigator.geolocation){log('GPS not supported');return;}
- navigator.geolocation.getCurrentPosition(p=>{
-  let f=JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
-  pos=f?f:{lat:p.coords.latitude,lng:p.coords.longitude};
-  document.getElementById('gps').style.color='#16a34a';
-  document.getElementById('gps').innerText='● Protected - Patrol can see you';
-  send(false);
-  setInterval(()=>send(false),15000);
- },e=>{log('Allow location: '+e.message); document.getElementById('gps').innerText='❌ Allow location permission';},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-}
-
-function openFix(){
- document.getElementById('fix').style.display='block';
- if(!map){
-  map=L.map('fixMap').setView([pos.lat,pos.lng],19);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(map);
-  pin=L.marker([pos.lat,pos.lng],{draggable:true}).addTo(map);
-  pin.on('dragend',e=>{let ll=e.target.getLatLng();pos={lat:ll.lat,lng:ll.lng}; log('New pin: '+ll.lat.toFixed(6))});
-  setTimeout(()=>map.invalidateSize(),300);
- }
-}
-function save(){
- localStorage.setItem('zondi_corrected_pin',JSON.stringify(pos));
- send(false);
- document.getElementById('msg').innerText='✅ House saved - future SOS correct';
- document.getElementById('fix').style.display='none';
-}
-let t=null; let b=document.getElementById('sosBtn');
-b.addEventListener('touchstart',()=>{t=setTimeout(()=>send(true),2000)});
-b.addEventListener('touchend',()=>clearTimeout(t));
-b.addEventListener('mousedown',()=>{t=setTimeout(()=>send(true),2000)});
-b.addEventListener('mouseup',()=>clearTimeout(t));
-init();
+function gpsError(err){ statusEl.innerHTML = err.code==1?'❌ BLOCKED - Tap 🔒 → Allow location':'📡 No signal - go outside'; statusEl.style.color='#e11d48';}
+function startGPS(){ statusEl.innerHTML='⌛ Asking location...'; if(!navigator.geolocation){statusEl.innerHTML='No GPS'; return;} navigator.geolocation.getCurrentPosition(p=>{showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy); navigator.geolocation.watchPosition(p=>showGPS(p.coords.latitude,p.coords.longitude,p.coords.accuracy),gpsError,{enableHighAccuracy:true,maximumAge:0,timeout:15000});},gpsError,{enableHighAccuracy:true,timeout:15000});}
+startGPS();
+let hold; let btn=document.getElementById('sosBtn');
+btn.addEventListener('touchstart',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',email:auth.email})}).then(()=>{btn.innerText='SOS SENT + 📍 '+myAddr; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('touchend',()=>clearTimeout(hold));
+btn.addEventListener('mousedown',()=>{hold=setTimeout(()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneId:phoneId,shop:myShop,address:myAddr,name:auth.name||'',lat:p.coords.latitude,lng:p.coords.longitude,type:'CLIENT_SOS',email:auth.email})}).then(()=>{btn.innerText='SOS SENT + 📍 '+myAddr; btn.style.background='#16a34a';})})},1500)}); btn.addEventListener('mouseup',()=>clearTimeout(hold));
 </script>
-</body>
-</html>
+</body></html>
