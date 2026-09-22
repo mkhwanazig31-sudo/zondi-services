@@ -5,12 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui;background:#fff;display:flex;flex-direction:column;min-height:100vh}
-.top{padding:18px;text-align:center;background:#fff;border-bottom:1px solid #f0f0f0}
+.top{padding:18px;text-align:center;border-bottom:1px solid #f0f0f0}
 .center{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px}
 .sos{width:220px;height:220px;border-radius:50%;border:0;background:#dc2626;color:#fff;font-weight:900;font-size:26px;box-shadow:0 12px 30px rgba(220,38,38,.4)}
-.sos:active{transform:scale(.96)}
 .small{font-size:12px;color:#888;margin-top:18px;text-decoration:underline;background:none;border:0}
-.dot{font-size:11px;color:#16a34a}
+.dot{font-size:11px}
 #fix{width:100%;display:none;margin-top:20px}
 #fixMap{height:40vh;width:100%;border-radius:16px}
 </style>
@@ -20,49 +19,60 @@
 <body>
 <div class="top">
 <b id="name">ZONDI</b><br>
-<span class="dot" id="gps">● Connecting...</span>
+<span class="dot" id="gps" style="color:#f59e0b">● Getting location...</span>
+<div id="debug" style="font-size:10px;color:#999;margin-top:4px"></div>
 </div>
-
 <div class="center">
-<button class="sos" id="sosBtn">SOS<br><span style="font-size:14px;font-weight:600;opacity:.9">HOLD 2 SEC</span></button>
-<div id="msg" style="margin-top:16px;font-size:14px;color:#16a34a;height:18px"></div>
-
+<button class="sos" id="sosBtn">SOS<br><span style="font-size:14px">HOLD 2 SEC</span></button>
+<div id="msg" style="margin-top:16px;font-size:14px;color:#16a34a;height:20px"></div>
 <button class="small" onclick="openFix()">My SOS goes to wrong house? Fix it</button>
-
-<div id="fix">
-<div id="fixMap"></div>
-<button onclick="save()" style="width:100%;margin-top:10px;padding:14px;border-radius:12px;border:0;background:#111;color:#fff;font-weight:700">SAVE CORRECT HOUSE</button>
-</div>
-
+<div id="fix"><div id="fixMap"></div><button onclick="save()" style="width:100%;margin-top:10px;padding:14px;border-radius:12px;border:0;background:#111;color:#fff;font-weight:700">SAVE CORRECT HOUSE</button></div>
 <button class="small" onclick="localStorage.clear();location.href='/login'">Logout</button>
 </div>
-
 <script>
 let auth=JSON.parse(localStorage.getItem('zondi_auth')||'{}');
-document.getElementById('name').innerText=auth.name||'ZONDI Client';
+document.getElementById('name').innerText=auth.email||'ZONDI';
 let pos=null,map=null,pin=null;
 
+function log(t){document.getElementById('debug').innerText=t; console.log(t);}
+
+async function send(isSOS){
+ if(!pos){log('No GPS yet'); return;}
+ let payload={
+  email: auth.email || 'mkhwanazig31@gmail.com',
+  name: auth.name || auth.email,
+  lat: parseFloat(pos.lat),
+  lng: parseFloat(pos.lng),
+  latitude: parseFloat(pos.lat),
+  longitude: parseFloat(pos.lng),
+  address: pos.lat+','+pos.lng,
+  shopName: auth.name||'Client',
+  sos: isSOS?true:false,
+  live: true,
+  time: new Date().toISOString()
+ };
+ log(`Sending ${isSOS?'SOS':''} ${payload.lat.toFixed(5)},${payload.lng.toFixed(5)} to patrol...`);
+ try{
+  let r = await fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  let j = await r.json();
+  log(`✅ Sent! Patrol should see you now`);
+  if(isSOS) document.getElementById('msg').innerText='✅ Patrol coming! Stay inside';
+  else document.getElementById('msg').innerText='📍 Live location shared with patrol';
+ }catch(e){
+  log('❌ Failed: '+e.message+' - check /api/sos');
+ }
+}
+
 function init(){
+ if(!navigator.geolocation){log('GPS not supported');return;}
  navigator.geolocation.getCurrentPosition(p=>{
   let f=JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
   pos=f?f:{lat:p.coords.latitude,lng:p.coords.longitude};
+  document.getElementById('gps').style.color='#16a34a';
   document.getElementById('gps').innerText='● Protected - Patrol can see you';
   send(false);
-  navigator.geolocation.watchPosition(pp=>{
-   let fix=JSON.parse(localStorage.getItem('zondi_corrected_pin')||'null');
-   if(!fix) pos={lat:pp.coords.latitude,lng:pp.coords.longitude};
-  },{},{enableHighAccuracy:true});
-  setInterval(()=>send(false),20000);
- },()=>{document.getElementById('gps').innerText='❌ Please allow location';},{enableHighAccuracy:true});
-}
-
-function send(isSOS){
- if(!pos) return;
- fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-  email:auth.email,name:auth.name,lat:pos.lat,lng:pos.lng,sos:isSOS,urgent:isSOS,time:new Date().toISOString()
- })}).then(()=>{
-  if(isSOS) document.getElementById('msg').innerText='✅ Patrol coming! Stay inside';
- });
+  setInterval(()=>send(false),15000);
+ },e=>{log('Allow location: '+e.message); document.getElementById('gps').innerText='❌ Allow location permission';},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
 }
 
 function openFix(){
@@ -71,25 +81,21 @@ function openFix(){
   map=L.map('fixMap').setView([pos.lat,pos.lng],19);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(map);
   pin=L.marker([pos.lat,pos.lng],{draggable:true}).addTo(map);
-  pin.on('dragend',e=>{let ll=e.target.getLatLng();pos={lat:ll.lat,lng:ll.lng}});
+  pin.on('dragend',e=>{let ll=e.target.getLatLng();pos={lat:ll.lat,lng:ll.lng}; log('New pin: '+ll.lat.toFixed(6))});
   setTimeout(()=>map.invalidateSize(),300);
  }
 }
-
 function save(){
  localStorage.setItem('zondi_corrected_pin',JSON.stringify(pos));
  send(false);
- document.getElementById('msg').innerText='✅ House saved';
+ document.getElementById('msg').innerText='✅ House saved - future SOS correct';
  document.getElementById('fix').style.display='none';
 }
-
-let t=null;
-let b=document.getElementById('sosBtn');
+let t=null; let b=document.getElementById('sosBtn');
 b.addEventListener('touchstart',()=>{t=setTimeout(()=>send(true),2000)});
 b.addEventListener('touchend',()=>clearTimeout(t));
 b.addEventListener('mousedown',()=>{t=setTimeout(()=>send(true),2000)});
 b.addEventListener('mouseup',()=>clearTimeout(t));
-
 init();
 </script>
 </body>
