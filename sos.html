@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.json">
+<title>Zondi SOS</title>
+<style>
+  body{background:#000;color:#fff;text-align:center;font-family:sans-serif;margin:0}
+  #holdBtn{width:220px;height:220px;border-radius:50%;border:8px solid #333;background:#111;color:#fff;font-size:22px;margin:40px auto;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  #progress{position:absolute;top:0;left:0;width:100%;height:100%;background:#ff0000;transform:scale(0);border-radius:50%;transition:transform 0.1s}
+  #ghost{display:none;position:fixed;inset:0;background:#000;color:#444;align-items:center;justify-content:center;font-size:18px}
+</style>
+</head>
+<body>
+  <h2>ZONDI - HOLD FOR HELP</h2>
+  <p id="status">Hold 1.5s - No login needed</p>
+  <div id="holdBtn"><div id="progress"></div><span id="label">HOLD</span></div>
+  <p style="color:#666">Shop: <span id="shop">Shop 4B (auto)</span> | Tracking: ON</p>
+  
+  <div id="ghost">No Signal<br><small>Searching...</small></div>
+
+<script>
+let holdTimer, progress=0, isHolding=false
+const btn=document.getElementById('holdBtn'), prog=document.getElementById('progress'), statusEl=document.getElementById('status')
+
+// Phone ID - saved once, works without login
+let phoneId = localStorage.getItem('zondi_id') || 'zondi_'+Math.random().toString(36).substr(2,6)
+localStorage.setItem('zondi_id', phoneId)
+
+function getLocation(){return new Promise(r=>navigator.geolocation.getCurrentPosition(p=>r(p.coords),()=>r(null),{enableHighAccuracy:true}))}
+
+async function sendSOS(isGhost=false){
+  const loc = await getLocation()
+  const payload = {
+    phoneId, shop: localStorage.getItem('shop')||'Shop 4B',
+    lat: loc?.latitude, lng: loc?.longitude,
+    battery: navigator.getBattery ? await navigator.getBattery().then(b=>b.level) : null,
+    type: isGhost ? 'GHOST_TRACK' : 'CLIENT_SOS',
+    time: new Date().toISOString()
+  }
+  // SEND TO YOUR BACKEND
+  fetch('/api/sos', {method:'POST', body:JSON.stringify(payload), headers:{'Content-Type':'application/json'}})
+  // Also send to WhatsApp webhook for guards
+  console.log('SOS SENT', payload)
+}
+
+btn.addEventListener('touchstart', startHold)
+btn.addEventListener('mousedown', startHold)
+btn.addEventListener('touchend', endHold)
+btn.addEventListener('mouseup', endHold)
+
+function startHold(){
+  isHolding=true; progress=0
+  navigator.vibrate && navigator.vibrate(50)
+  holdTimer=setInterval(()=>{
+    progress+=0.07 // 1.5s = ~21 ticks
+    prog.style.transform=`scale(${progress})`
+    if(progress>=0.5) navigator.vibrate && navigator.vibrate(50)
+    if(progress>=1){
+      clearInterval(holdTimer)
+      navigator.vibrate && navigator.vibrate([100,50,100])
+      triggerSOS()
+    }
+  },70)
+}
+function endHold(){
+  if(!isHolding) return
+  isHolding=false; clearInterval(holdTimer)
+  if(progress<1){ prog.style.transform='scale(0)'; statusEl.innerText='Cancelled - Hold 1.5s to send' }
+}
+
+async function triggerSOS(){
+  statusEl.innerText='SENDING... Stay calm'
+  document.getElementById('ghost').style.display='flex' // Fake dead screen
+  await sendSOS(false)
+  // Start aggressive tracking every 10 sec
+  setInterval(()=>sendSOS(true), 10000)
+  // Last gasp - if they try power off
+  window.addEventListener('beforeunload', ()=>{ navigator.sendBeacon('/api/sos', JSON.stringify({phoneId, type:'LAST_GASP', time:Date.now()})) })
+}
+
+// ALWAYS-ON tracking every 2 min (if user opted in)
+if(localStorage.getItem('always_track')!=='off'){
+  setInterval(()=>sendSOS(true), 120000)
+  // Send first ping
+  sendSOS(true)
+}
+
+// Register service worker for PWA
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js')
+</script>
+</body>
+</html>
