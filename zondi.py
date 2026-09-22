@@ -1,37 +1,28 @@
-# zondi.py V7.2 FIXED - Welcoming + Shop tab - NO CRASH
+# zondi.py V7.4 - Removed shop name from registration
 from flask import Flask, request, jsonify, session, redirect
 import os, datetime, json
 from pathlib import Path
 
 app = Flask(__name__)
-app.secret_key = "zondi-v7-2-fixed"
+app.secret_key = "zondi-v7-4-no-shop-field"
 Path("evidence").mkdir(exist_ok=True)
 EVIDENCE_FILE = "evidence/data.json"
 USERS_FILE = "evidence/users.json"
 
 def load_evidence():
     if os.path.exists(EVIDENCE_FILE):
-        try:
-            return json.load(open(EVIDENCE_FILE))
-        except:
-            return []
+        try: return json.load(open(EVIDENCE_FILE))
+        except: return []
     return []
-
 def load_users():
     if os.path.exists(USERS_FILE):
-        try:
-            return json.load(open(USERS_FILE))
-        except:
-            pass
+        try: return json.load(open(USERS_FILE))
+        except: pass
     return {"guard1":{"pass":"1234","role":"guard"},"client1":{"pass":"1234","role":"client"}}
-
 def save_ev(data):
-    with open(EVIDENCE_FILE,"w") as f:
-        json.dump(data,f)
-
+    with open(EVIDENCE_FILE,"w") as f: json.dump(data,f)
 def save_users(data):
-    with open(USERS_FILE,"w") as f:
-        json.dump(data,f)
+    with open(USERS_FILE,"w") as f: json.dump(data,f)
 
 COMMON_STYLE = """
 <style>
@@ -53,7 +44,7 @@ LANDING = COMMON_STYLE + """
 <div style="text-align:center;padding:60px 20px;background:white">
 <span style="background:#e8f0ff;color:#0b5fff;padding:6px 12px;border-radius:100px;font-size:11px;font-weight:700">GA-RANKUWA • SOSHANGUVE • MABOPANE</span>
 <h1 style="font-size:38px;color:#10203a;margin:16px 0">Security that <span style="color:#0b5fff">feels like family</span><br>protects like SAPS.</h1>
-<p style="color:#6a7a8a;max-width:560px;margin:auto">No more black Matrix screens. Clean, friendly, works offline. Buy protection in our Shop like airtime.</p>
+<p style="color:#6a7a8a;max-width:560px;margin:auto">Clean, friendly, works offline. Buy protection in our Shop like airtime.</p>
 <div style="margin-top:24px"><a class="btn btn-primary" href="/shop">Go to Shop</a> <a class="btn btn-out" href="/login" style="margin-left:8px">Login</a></div>
 </div>
 <div style="max-width:1000px;margin:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:20px">
@@ -88,7 +79,7 @@ LOGIN_PAGE = COMMON_STYLE + """
 <h2 style="margin:0;color:#10203a;text-align:center">Welcome</h2><p style="text-align:center;color:#888;font-size:13px">Login to your shop</p>
 <div class="tab"><div id="t1" class="active" onclick="showTab(1)">Login</div><div id="t2" onclick="showTab(2)">Register</div></div>
 <div id="loginForm"><input id="u" placeholder="username lowercase"><input id="p" type="password" placeholder="password"><button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="doLogin()">Login</button><p id="msg1" style="color:red;font-size:12px"></p></div>
-<div id="regForm" style="display:none"><input id="ru" placeholder="username"><input id="rp" type="password" placeholder="password"><select id="rr"><option value="client">Shop Owner</option><option value="guard">Guard</option></select><input id="rc" placeholder="Shop name"><button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="doReg()">Create account</button><p id="msg2" style="font-size:12px"></p></div>
+<div id="regForm" style="display:none"><input id="ru" placeholder="username"><input id="rp" type="password" placeholder="password"><select id="rr"><option value="client">Client</option><option value="guard">Guard</option></select><button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="doReg()">Create account</button><p id="msg2" style="font-size:12px"></p></div>
 </div>
 <script>
 function showTab(n){
@@ -108,9 +99,8 @@ async function doReg(){
  let u=document.getElementById("ru").value.trim().toLowerCase();
  let p=document.getElementById("rp").value.trim();
  let r=document.getElementById("rr").value;
- let c=document.getElementById("rc").value;
  if(!u||!p){document.getElementById("msg2").innerText="Fill all"; return;}
- let res=await fetch("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({u,p,role:r,company:c})});
+ let res=await fetch("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({u,p,role:r})});
  let d=await res.json();
  if(d.ok){document.getElementById("msg2").style.color="green"; document.getElementById("msg2").innerText="Created! Login now."; showTab(1);}
  else {document.getElementById("msg2").style.color="red"; document.getElementById("msg2").innerText=d.error;}
@@ -126,9 +116,9 @@ DASH_PAGE = COMMON_STYLE + """
 <style>#map{height:260px;border-radius:16px}.log{background:#10203a;color:#7aff9a;height:80px;overflow-y:auto;font-size:11px;padding:8px;border-radius:10px}</style>
 </head><body>
 <div class="nav"><div class="logo">ZONDI DASHBOARD</div><div><a href="/">Home</a><a href="/shop">Shop</a><span id="rb" style="font-weight:700;color:#0b5fff;margin-left:10px"></span><button onclick="fetch('/api/logout').then(()=>location='/')" style="margin-left:8px;border:none;background:#f0f5ff;padding:6px 12px;border-radius:8px">Logout</button></div></div>
-<div class="card"><b>Safety:</b> Last move <span id="lastMove">Just now</span> | Queue <span id="q">0</span><div style="background:#e8eef7;height:8px;border-radius:10px;margin-top:8px"><div id="bar" style="background:#0b5fff;height:8px;width:100%;border-radius:10px"></div></div></div>
+<div class="card"><b>Safety:</b> Last move <span id="lastMove">Just now</span><div style="background:#e8eef7;height:8px;border-radius:10px;margin-top:8px"><div id="bar" style="background:#0b5fff;height:8px;width:100%;border-radius:10px"></div></div></div>
 <div class="card"><button class="btn btn-primary" style="width:100%" onclick="simMove()">Simulate Patrol Move</button><button class="btn" style="width:100%;margin-top:8px;background:#ff3b3b;color:white" onclick="doSOS('MANUAL')">SOS + WhatsApp</button><video id="vid" autoplay muted style="width:100%;height:160px;background:#10203a;border-radius:12px;margin-top:10px;display:none"></video><div id="log" class="log" style="margin-top:10px">Ready</div></div>
-<div class="card"><div id="map"></div><p id="coords" style="font-size:12px;color:#666"></p></div>
+<div class="card"><div id="map"></div></div>
 <div class="card"><h3>Evidence</h3><div id="evList" style="font-size:12px"></div></div>
 <script>
 let lastMove=Date.now(), curLat=-25.6242, curLng=28.0038;
@@ -137,95 +127,61 @@ let map=L.map("map").setView([-25.6242,28.0038],14); L.tileLayer("https://{s}.ti
 function log(m){let l=document.getElementById("log"); l.innerHTML=new Date().toLocaleTimeString()+" - "+m+"<br>"+l.innerHTML;}
 function simMove(){curLat=-25.6242+(Math.random()-0.5)*0.01; curLng=28.0038+(Math.random()-0.5)*0.01; mk.setLatLng([curLat,curLng]); map.setView([curLat,curLng]); lastMove=Date.now(); document.getElementById("lastMove").innerText="Just now"; document.getElementById("bar").style.width="100%"; log("Moved");}
 setInterval(()=>{let d=(Date.now()-lastMove)/1000; if(d>10) document.getElementById("lastMove").innerText=Math.floor(d)+"s ago"; let pct=Math.max(0,100-(d/120)*100); document.getElementById("bar").style.width=pct+"%";},1000);
-async function doSOS(t){log(t+" SOS"); let v=document.getElementById("vid"); v.style.display="block"; try{let s=await navigator.mediaDevices.getUserMedia({video:true,audio:true}); v.srcObject=s; let ch=[]; let rec=new MediaRecorder(s); rec.ondataavailable=e=>ch.push(e.data); rec.onstop=async()=>{let b=new Blob(ch,{type:"video/webm"}); let fd=new FormData(); fd.append("video",b,"sos.webm"); fd.append("trigger",t); fd.append("lat",curLat); fd.append("lng",curLng); await fetch("/api/emergency/upload",{method:"POST",body:fd}); loadEv(); window.open("https://wa.me/?text="+encodeURIComponent("ZONDI SOS "+t+" https://maps.google.com/?q="+curLat+","+curLng),"_blank");}; rec.start(); setTimeout(()=>{rec.stop(); s.getTracks().forEach(x=>x.stop());},8000);}catch(e){let fd=new FormData(); fd.append("trigger",t); fd.append("lat",curLat); fd.append("lng",curLng); await fetch("/api/emergency/upload",{method:"POST",body:fd}); loadEv();}}
+async function doSOS(t){log(t+" SOS"); let v=document.getElementById("vid"); v.style.display="block"; try{let s=await navigator.mediaDevices.getUserMedia({video:true,audio:true}); v.srcObject=s; let ch=[]; let rec=new MediaRecorder(s); rec.ondataavailable=e=>ch.push(e.data); rec.onstop=async()=>{let b=new Blob(ch,{type:"video/webm"}); let fd=new FormData(); fd.append("video",b,"sos.webm"); fd.append("trigger",t); fd.append("lat",curLat); fd.append("lng",curLng); await fetch("/api/emergency/upload",{method:"POST",body:fd}); loadEv();}; rec.start(); setTimeout(()=>{rec.stop(); s.getTracks().forEach(x=>x.stop());},8000);}catch(e){let fd=new FormData(); fd.append("trigger",t); await fetch("/api/emergency/upload",{method:"POST",body:fd}); loadEv();}}
 async function loadEv(){let r=await fetch("/api/evidence"); let ls=await r.json(); document.getElementById("evList").innerHTML=ls.map(e=>"<div style=background:#f6f8fb;padding:8px;margin:4px 0;border-radius:10px>"+e.id+" | "+e.trigger+"<br><small>"+e.timestamp+"</small></div>").join("")||"No evidence";}
-document.getElementById("coords").innerText=curLat+", "+curLng;
 </script>
 </body></html>
 """
 
 @app.route("/")
-def home():
-    return LANDING
-
+def home(): return LANDING
 @app.route("/shop")
-def shop():
-    return SHOP_PAGE
-
+def shop(): return SHOP_PAGE
 @app.route("/pricing")
-def pricing():
-    return SHOP_PAGE
-
+def pricing(): return SHOP_PAGE
 @app.route("/login")
 def login_page():
-    if session.get("user"):
-        return redirect("/dashboard")
+    if session.get("user"): return redirect("/dashboard")
     return LOGIN_PAGE
-
 @app.route("/dashboard")
 def dashboard():
-    if not session.get("user"):
-        return redirect("/login")
+    if not session.get("user"): return redirect("/login")
     return DASH_PAGE
-
 @app.route("/api/register", methods=["POST"])
 def register():
-    data = request.get_json()
-    u = data.get("u","").strip().lower()
-    p = data.get("p","").strip()
-    role = data.get("role","client")
-    if not u or not p:
-        return jsonify({"ok":False,"error":"Fill all"})
-    users = load_users()
-    if u in users:
-        return jsonify({"ok":False,"error":"Exists"})
-    users[u] = {"pass":p,"role":role}
-    save_users(users)
-    return jsonify({"ok":True})
-
+    data=request.get_json()
+    u=data.get("u","").strip().lower(); p=data.get("p","").strip(); role=data.get("role","client")
+    if not u or not p: return jsonify({"ok":False,"error":"Fill all"})
+    users=load_users()
+    if u in users: return jsonify({"ok":False,"error":"Exists"})
+    users[u]={"pass":p,"role":role}; save_users(users); return jsonify({"ok":True})
 @app.route("/api/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    u = data.get("u","").strip().lower()
-    p = data.get("p","").strip()
-    users = load_users()
-    if u in users and users[u]["pass"] == p:
-        session["user"] = u
-        session["role"] = users[u]["role"]
-        return jsonify({"ok":True})
+    data=request.get_json()
+    u=data.get("u","").strip().lower(); p=data.get("p","").strip()
+    users=load_users()
+    if u in users and users[u]["pass"]==p:
+        session["user"]=u; session["role"]=users[u]["role"]; return jsonify({"ok":True})
     return jsonify({"ok":False})
-
 @app.route("/api/me")
 def me():
-    if not session.get("user"):
-        return jsonify({"role":"none"})
+    if not session.get("user"): return jsonify({"role":"none"})
     return jsonify({"user":session.get("user"),"role":session.get("role")})
-
 @app.route("/api/logout")
-def logout():
-    session.clear()
-    return jsonify({"ok":True})
-
+def logout(): session.clear(); return jsonify({"ok":True})
 @app.route("/api/emergency/upload", methods=["POST"])
 def upload():
-    trigger = request.form.get("trigger","SOS")
-    lat = request.form.get("lat")
-    lng = request.form.get("lng")
-    video = request.files.get("video")
-    fname = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".webm"
-    if video:
-        video.save(os.path.join("evidence",fname))
-    ev = load_evidence()
-    entry = {"id":f"EV-{len(ev)+1:04d}","timestamp":datetime.datetime.now().isoformat(),"trigger":trigger,"lat":lat,"lng":lng,"video":fname}
-    ev.append(entry)
-    save_ev(ev)
-    return jsonify(entry)
-
+    trigger=request.form.get("trigger","SOS"); lat=request.form.get("lat"); lng=request.form.get("lng")
+    video=request.files.get("video")
+    fname=datetime.datetime.now().strftime("%Y%m%d_%H%M%S")+".webm"
+    if video: video.save(os.path.join("evidence",fname))
+    ev=load_evidence()
+    entry={"id":f"EV-{len(ev)+1:04d}","timestamp":datetime.datetime.now().isoformat(),"trigger":trigger,"lat":lat,"lng":lng,"video":fname}
+    ev.append(entry); save_ev(ev); return jsonify(entry)
 @app.route("/api/evidence")
 def ev():
-    if not session.get("user"):
-        return jsonify([])
+    if not session.get("user"): return jsonify([])
     return jsonify(load_evidence())
 
-if __name__ == "__main__":
+if __name__=="__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
