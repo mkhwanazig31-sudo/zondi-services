@@ -1,28 +1,51 @@
-<!DOCTYPE html><html><head><title>Zondi Login</title><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{margin:0;font-family:system-ui;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px} .card{width:100%;max-width:380px;background:#fff;padding:22px;border-radius:24px} input{width:100%;padding:14px;border-radius:12px;border:1px solid #ddd;margin-top:10px;box-sizing:border-box} button{width:100%;padding:14px;border-radius:12px;border:0;background:#111;color:#fff;margin-top:12px;font-weight:800} #msg{font-size:12px;color:#e11d48;margin-top:8px;text-align:center}</style></head><body>
-<div class="card">
-<h2 style="margin:0">🛡️ Zondi Login</h2><p style="font-size:12px;color:#666">Enter your registered email & password</p>
-<input id="email" placeholder="Email">
-<input id="password" type="password" placeholder="Password">
-<button onclick="login()">Login</button>
-<div id="msg"></div>
-<p style="font-size:12px;text-align:center;margin-top:14px">No account? <a href="/register" style="font-weight:800">Register here</a></p>
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0a0c10">
+<title>Zondi - Login</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
+body{background:#0a0c10;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.phone{width:100%;max-width:390px;background:#0a0c10;border:1px solid #1e222f;border-radius:36px;padding:28px}
+.notch{width:90px;height:5px;background:#2a2e39;border-radius:10px;margin:0 auto 20px}
+.logo{width:64px;height:64px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px;box-shadow:0 8px 20px #22c55e44}
+h1{text-align:center;font-weight:900;font-size:26px}
+.sub{text-align:center;color:#6b7280;font-size:13px;margin:8px 0 24px}
+.input-group{background:#151821;border:1px solid #1e222f;border-radius:14px;padding:4px 14px;display:flex;margin-bottom:12px}
+.input-group:focus-within{border-color:#22c55e}
+.input-group input{flex:1;background:transparent;border:0;color:#fff;padding:12px 0;outline:none;font-size:15px}
+.btn{width:100%;padding:16px;border-radius:14px;border:0;background:#fff;color:#000;font-weight:800;font-size:16px;cursor:pointer}
+.error,.pending{display:none;padding:12px;border-radius:12px;font-size:13px;margin-bottom:12px}
+.error{background:#2a1a1a;border:1px solid #ff3b30;color:#ff8a80}
+.pending{background:#2a2410;border:1px solid #fbbf24;color:#fde68a}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="logo">🛡️</div>
+  <h1>ZONDI</h1>
+  <div class="sub">Community safety • Ga-Rankuwa</div>
+  <div id="err" class="error"></div>
+  <div id="pending" class="pending"></div>
+  <div class="input-group"><input id="username" placeholder="Username or email"></div>
+  <div class="input-group"><input id="password" type="password" placeholder="Password"></div>
+  <button class="btn" onclick="login()">Login →</button>
+  <div style="text-align:center;margin-top:20px;font-size:13px;color:#6b7280">No account? <a href="/register" style="color:#22c55e;text-decoration:none;font-weight:700">Create one</a></div>
 </div>
 <script>
 async function login(){
- let email=document.getElementById('email').value.trim();
- let password=document.getElementById('password').value;
- let msg=document.getElementById('msg');
- if(!email||!password){msg.innerText='Enter email and password'; return;}
- try{
-  let res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
-  let j=await res.json();
-  if(!res.ok){msg.innerText=j.error||'Wrong email or password'; return;}
-  localStorage.setItem('zondi_auth',JSON.stringify({email:j.email||email,name:j.name||email,role:j.role||'client'}));
-  localStorage.setItem('zondi_address',j.address||'Ga-Rankuwa');
-  localStorage.setItem('zondi_shopname',j.name||email);
-  if((j.role||'client')=='patroller') location.href='/patrollers'; else location.href='/clients';
- }catch(e){msg.innerText='Server offline - try again';}
+  const u=document.getElementById('username').value.trim();
+  const p=document.getElementById('password').value;
+  const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+  const data=await res.json();
+  if(res.ok){ localStorage.setItem('zondi_user',u); location.href=data.redirect; }
+  else { 
+    if(res.status===403){ document.getElementById('pending').textContent=data.msg; document.getElementById('pending').style.display='block'; }
+    else { document.getElementById('err').textContent=data.msg; document.getElementById('err').style.display='block'; }
+  }
 }
 </script>
-</body></html>
+</body>
+</html>
