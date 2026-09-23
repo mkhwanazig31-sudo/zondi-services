@@ -1,45 +1,1509 @@
-<!DOCTYPE html><html><head><title>Zondi Register</title><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{margin:0;font-family:system-ui;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px} .card{width:100%;max-width:400px;background:#fff;padding:22px;border-radius:24px} input,select{width:100%;padding:14px;border-radius:12px;border:1px solid #ddd;margin-top:10px;box-sizing:border-box} button{width:100%;padding:14px;border-radius:12px;border:0;background:#111;color:#fff;margin-top:14px;font-weight:800} .role{display:flex;gap:8px;margin-top:12px} .role button{flex:1;background:#f1f5f9;color:#111;border:1px solid #ddd} .role button.active{background:#111;color:#fff}</style></head><body>
-<div class="card">
-<h2 style="margin:0">🛡️ Create Account</h2><p style="font-size:12px;color:#666">Zondi Services - Client or Patroller</p>
-<input id="name" placeholder="Full Name - e.g. Kabelo">
-<input id="email" placeholder="Email - e.g. kabelo@gmail.com">
-<input id="phone" placeholder="Phone - e.g. 0712345678">
-<input id="address" placeholder="Address - e.g. 8643 Motsatsi Rd, Ga-Rankuwa">
-<input id="password" type="password" placeholder="Password">
-<input id="password2" type="password" placeholder="Confirm Password">
-<div class="role"><button id="btnClient" class="active" onclick="setRole('client')">📱 Client</button><button id="btnPat" onclick="setRole('patroller')">🚓 Patroller</button></div>
-<button onclick="register()">Register</button>
-<p style="font-size:12px;text-align:center;margin-top:12px">Already have account? <a href="/login">Login</a></p>
-<div id="msg" style="font-size:12px;color:#e11d48;margin-top:10px;text-align:center"></div>
-</div>
-<script>
-let role='client';
-function setRole(r){role=r; document.getElementById('btnClient').classList.toggle('active',r=='client'); document.getElementById('btnPat').classList.toggle('active',r=='patroller');}
-async function register(){
- let name=document.getElementById('name').value.trim();
- let email=document.getElementById('email').value.trim();
- let phone=document.getElementById('phone').value.trim();
- let address=document.getElementById('address').value.trim();
- let p1=document.getElementById('password').value;
- let p2=document.getElementById('password2').value;
- let msg=document.getElementById('msg');
- if(!name||!email||!p1){msg.innerText='Fill all required fields'; return;}
- if(p1!=p2){msg.innerText='Passwords do not match'; return;}
- if(p1.length<4){msg.innerText='Password too short (min 4)'; return;}
- let data={name,email,phone,address,password:p1,role,phoneId:email};
- try{
-  let res=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  let j=await res.json();
-  if(!res.ok){msg.innerText=j.error||'Failed'; return;}
-  // save locally too
-  localStorage.setItem('zondi_auth',JSON.stringify({email,name,role}));
-  localStorage.setItem('zondi_address',address);
-  localStorage.setItem('zondi_shopname',name);
-  localStorage.setItem('zondi_phone',phone);
-  alert('Account created! Now login');
-  location.href='/login';
- }catch(e){msg.innerText='Server error - try again';}
-}
-</script>
-</body></html>
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+
+>
+
+  <meta name="theme-color" content="#07100b">
+  <meta name="color-scheme" content="dark">
+
+  <title>Zondi — Create Account</title>
+
+  <style>
+    :root {
+      --bg: #050806;
+      --card: rgba(13, 20, 15, 0.91);
+      --card-border: rgba(255, 255, 255, 0.08);
+
+      --green: #22c55e;
+      --green-light: #4ade80;
+      --green-dark: #16a34a;
+
+      --text: #f8fafc;
+      --muted: #8b949e;
+      --muted-dark: #59636b;
+
+      --input: rgba(255, 255, 255, 0.045);
+      --input-focus: rgba(34, 197, 94, 0.08);
+
+      --danger: #ffb4b4;
+      --danger-bg: rgba(127, 29, 29, 0.18);
+
+      --warning: #fde68a;
+      --warning-bg: rgba(120, 53, 15, 0.18);
+
+      --radius-xl: 28px;
+      --radius-md: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--bg);
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+
+      font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      color: var(--text);
+
+      background:
+        radial-gradient(
+          circle at 50% -10%,
+          rgba(34, 197, 94, 0.14),
+          transparent 38%
+        ),
+        radial-gradient(
+          circle at 100% 100%,
+          rgba(22, 163, 74, 0.08),
+          transparent 32%
+        ),
+        var(--bg);
+
+      display: flex;
+      justify-content: center;
+
+      padding: 18px;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+
+      width: 280px;
+      height: 280px;
+
+      border-radius: 50%;
+
+      top: -150px;
+      right: -100px;
+
+      background: rgba(34, 197, 94, 0.08);
+      filter: blur(50px);
+
+      pointer-events: none;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+
+      width: 240px;
+      height: 240px;
+
+      border-radius: 50%;
+
+      bottom: -150px;
+      left: -90px;
+
+      background: rgba(34, 197, 94, 0.05);
+      filter: blur(55px);
+
+      pointer-events: none;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 470px;
+
+      padding: 8px 0;
+
+      position: relative;
+      z-index: 2;
+    }
+
+    .shell {
+      width: 100%;
+
+      padding: 30px;
+
+      border-radius: var(--radius-xl);
+
+      border: 1px solid var(--card-border);
+
+      background:
+        linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.025),
+          rgba(255, 255, 255, 0)
+        ),
+        var(--card);
+
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+
+      box-shadow:
+        0 30px 70px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    }
+
+    /* Brand */
+
+    .top-line {
+      width: 62px;
+      height: 4px;
+
+      margin: 0 auto 28px;
+
+      border-radius: 999px;
+
+      background:
+        linear-gradient(
+          90deg,
+          var(--green-dark),
+          var(--green-light)
+        );
+
+      box-shadow:
+        0 0 22px rgba(34, 197, 94, 0.35);
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 26px;
+    }
+
+    .logo-wrap {
+      width: 72px;
+      height: 72px;
+
+      margin: 0 auto 15px;
+
+      border-radius: 22px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      background:
+        linear-gradient(
+          145deg,
+          rgba(74, 222, 128, 0.24),
+          rgba(22, 163, 74, 0.11)
+        );
+
+      border:
+        1px solid rgba(74, 222, 128, 0.18);
+
+      box-shadow:
+        0 18px 38px rgba(34, 197, 94, 0.11),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    }
+
+    .logo {
+      width: 43px;
+      height: 43px;
+
+      border-radius: 14px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      font-size: 23px;
+
+      background:
+        linear-gradient(
+          145deg,
+          var(--green-light),
+          var(--green-dark)
+        );
+
+      box-shadow:
+        0 9px 22px rgba(34, 197, 94, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+
+    .brand h1 {
+      font-size: 26px;
+      line-height: 1;
+
+      letter-spacing: 0.105em;
+
+      font-weight: 900;
+
+      margin-bottom: 9px;
+    }
+
+    .brand p {
+      color: var(--muted);
+
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .brand p strong {
+      color: #b6f3c9;
+      font-weight: 700;
+    }
+
+    /* Messages */
+
+    .message {
+      display: none;
+
+      padding: 13px 14px;
+      margin-bottom: 15px;
+
+      border-radius: var(--radius-md);
+
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .message.show {
+      display: block;
+      animation: slideDown 0.25s ease;
+    }
+
+    .message.error {
+      color: var(--danger);
+      background: var(--danger-bg);
+      border: 1px solid rgba(255, 107, 107, 0.2);
+    }
+
+    .message.pending {
+      color: var(--warning);
+      background: var(--warning-bg);
+      border: 1px solid rgba(251, 191, 36, 0.18);
+    }
+
+    /* Form */
+
+    .form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .label {
+      padding-left: 3px;
+
+      color: #aab3ba;
+
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .optional {
+      color: #59636b;
+      font-weight: 500;
+    }
+
+    .input-wrap {
+      min-height: 54px;
+
+      display: flex;
+      align-items: center;
+
+      padding: 0 15px;
+
+      border-radius: var(--radius-md);
+
+      border:
+        1px solid rgba(255, 255, 255, 0.075);
+
+      background: var(--input);
+
+      transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+    }
+
+    .input-wrap:focus-within {
+      border-color: rgba(34, 197, 94, 0.6);
+
+      background: var(--input-focus);
+
+      box-shadow:
+        0 0 0 4px rgba(34, 197, 94, 0.08),
+        0 10px 25px rgba(0, 0, 0, 0.12);
+    }
+
+    .icon {
+      width: 20px;
+
+      margin-right: 11px;
+
+      flex-shrink: 0;
+
+      font-size: 15px;
+
+      opacity: 0.62;
+    }
+
+    .input-wrap input {
+      width: 100%;
+      min-width: 0;
+
+      border: 0;
+      outline: 0;
+
+      background: transparent;
+      color: var(--text);
+
+      font: inherit;
+      font-size: 14px;
+
+      padding: 15px 0;
+    }
+
+    .input-wrap input::placeholder {
+      color: var(--muted-dark);
+    }
+
+    /* Password */
+
+    .password-toggle {
+      border: 0;
+      background: transparent;
+
+      color: #7f898f;
+
+      cursor: pointer;
+
+      padding: 7px;
+
+      border-radius: 9px;
+
+      font-size: 15px;
+
+      flex-shrink: 0;
+
+      transition:
+        color 0.2s ease,
+        background 0.2s ease;
+    }
+
+    .password-toggle:hover {
+      color: var(--green-light);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Password meter */
+
+    .password-meter {
+      display: none;
+      margin-top: 2px;
+    }
+
+    .password-meter.show {
+      display: block;
+    }
+
+    .meter-bars {
+      display: flex;
+      gap: 5px;
+    }
+
+    .meter-bar {
+      height: 3px;
+
+      flex: 1;
+
+      border-radius: 99px;
+
+      background: rgba(255, 255, 255, 0.08);
+
+      transition: background 0.2s ease;
+    }
+
+    .meter-label {
+      margin-top: 5px;
+
+      color: #667078;
+
+      font-size: 10px;
+    }
+
+    /* Role selector */
+
+    .role-section {
+      display: grid;
+      gap: 9px;
+
+      margin-top: 2px;
+    }
+
+    .roles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+
+      gap: 10px;
+    }
+
+    .role-card {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .role-card input {
+      position: absolute;
+
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .role-content {
+      min-height: 106px;
+
+      padding: 15px;
+
+      border-radius: var(--radius-md);
+
+      border:
+        1px solid rgba(255, 255, 255, 0.075);
+
+      background: rgba(255, 255, 255, 0.035);
+
+      transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+    }
+
+    .role-card:hover .role-content {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .role-card input:checked + .role-content {
+      border-color: rgba(34, 197, 94, 0.65);
+
+      background:
+        linear-gradient(
+          145deg,
+          rgba(34, 197, 94, 0.12),
+          rgba(34, 197, 94, 0.045)
+        );
+
+      box-shadow:
+        0 0 0 3px rgba(34, 197, 94, 0.07),
+        0 12px 28px rgba(0, 0, 0, 0.12);
+    }
+
+    .role-icon {
+      width: 35px;
+      height: 35px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      border-radius: 11px;
+
+      background: rgba(255, 255, 255, 0.06);
+
+      margin-bottom: 10px;
+
+      font-size: 17px;
+    }
+
+    .role-card input:checked + .role-content .role-icon {
+      background: rgba(34, 197, 94, 0.16);
+    }
+
+    .role-title {
+      font-size: 13px;
+      font-weight: 850;
+
+      margin-bottom: 3px;
+    }
+
+    .role-description {
+      color: #727e85;
+
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    /* Register button */
+
+    .register-btn {
+      width: 100%;
+      min-height: 56px;
+
+      margin-top: 4px;
+
+      border: 0;
+      border-radius: var(--radius-md);
+
+      background:
+        linear-gradient(
+          135deg,
+          var(--green-light),
+          var(--green-dark)
+        );
+
+      color: #031107;
+
+      font-size: 15px;
+      font-weight: 900;
+
+      cursor: pointer;
+
+      box-shadow:
+        0 14px 30px rgba(34, 197, 94, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+
+      transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        filter 0.18s ease;
+    }
+
+    .register-btn:hover {
+      transform: translateY(-1px);
+
+      filter: brightness(1.04);
+
+      box-shadow:
+        0 18px 34px rgba(34, 197, 94, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    }
+
+    .register-btn:active {
+      transform: translateY(1px) scale(0.995);
+    }
+
+    .register-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.72;
+      transform: none;
+    }
+
+    .btn-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+
+      border: 2px solid rgba(3, 17, 7, 0.25);
+      border-top-color: #031107;
+
+      border-radius: 50%;
+
+      animation: spin 0.7s linear infinite;
+
+      display: none;
+    }
+
+    .register-btn.loading .spinner {
+      display: block;
+    }
+
+    /* Footer */
+
+    .footer {
+      margin-top: 20px;
+
+      text-align: center;
+
+      color: var(--muted);
+
+      font-size: 13px;
+    }
+
+    .footer a {
+      color: var(--green-light);
+
+      font-weight: 800;
+
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      color: #86efac;
+    }
+
+    .security-note {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      gap: 7px;
+
+      margin-top: 20px;
+      padding-top: 18px;
+
+      border-top: 1px solid rgba(255, 255, 255, 0.055);
+
+      color: #5f696f;
+
+      font-size: 11px;
+
+      text-align: center;
+    }
+
+    .security-dot {
+      width: 6px;
+      height: 6px;
+
+      border-radius: 50%;
+
+      background: var(--green);
+
+      box-shadow:
+        0 0 10px rgba(34, 197, 94, 0.6);
+    }
+
+    /* Responsive */
+
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+
+      .page {
+        padding: 5px 0;
+      }
+
+      .shell {
+        padding: 24px 18px 20px;
+        border-radius: 24px;
+      }
+
+      .roles {
+        gap: 8px;
+      }
+
+      .role-content {
+        padding: 13px;
+      }
+    }
+
+    @media (min-width: 700px) {
+      .shell {
+        padding: 36px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-5px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <main class="page">
+
+```
+<section class="shell" aria-label="Create Zondi account">
+
+  <div class="top-line"></div>
+
+  <header class="brand">
+
+    <div class="logo-wrap">
+      <div class="logo" aria-hidden="true">🛡️</div>
+    </div>
+
+    <h1>JOIN ZONDI</h1>
+
+    <p>
+      Build a safer
+      <strong>Ga-Rankuwa</strong>
+      together
+    </p>
+
+  </header>
+
+  <div
+    id="errorBox"
+    class="message error"
+    role="alert"
+  ></div>
+
+  <div
+    id="pendingBox"
+    class="message pending"
+    role="status"
+  ></div>
+
+  <form id="registerForm" class="form">
+
+    <!-- Full name -->
+    <div class="field">
+
+      <label class="label" for="name">
+        Full name
+      </label>
+
+      <div class="input-wrap">
+
+        <span class="icon" aria-hidden="true">👤</span>
+
+        <input
+          id="name"
+          type="text"
+          autocomplete="name"
+          placeholder="Your full name"
+          required
+        >
+
+      </div>
+
+    </div>
+
+    <!-- Email -->
+    <div class="field">
+
+      <label class="label" for="email">
+        Email address
+      </label>
+
+      <div class="input-wrap">
+
+        <span class="icon" aria-hidden="true">✉</span>
+
+        <input
+          id="email"
+          type="email"
+          autocomplete="email"
+          placeholder="you@example.com"
+          required
+        >
+
+      </div>
+
+    </div>
+
+    <!-- Phone -->
+    <div class="field">
+
+      <label class="label" for="phone">
+        Phone number
+        <span class="optional">(optional)</span>
+      </label>
+
+      <div class="input-wrap">
+
+        <span class="icon" aria-hidden="true">📱</span>
+
+        <input
+          id="phone"
+          type="tel"
+          autocomplete="tel"
+          placeholder="e.g. 071 234 5678"
+        >
+
+      </div>
+
+    </div>
+
+    <!-- Address -->
+    <div class="field">
+
+      <label class="label" for="address">
+        Home address
+        <span class="optional">(optional)</span>
+      </label>
+
+      <div class="input-wrap">
+
+        <span class="icon" aria-hidden="true">📍</span>
+
+        <input
+          id="address"
+          type="text"
+          autocomplete="street-address"
+          placeholder="e.g. 8643 Motsatsi Rd"
+        >
+
+      </div>
+
+    </div>
+
+    <!-- Role -->
+    <div class="role-section">
+
+      <div class="label">
+        Choose your Zondi role
+      </div>
+
+      <div class="roles">
+
+        <label class="role-card">
+
+          <input
+            type="radio"
+            name="role"
+            value="client"
+            checked
+          >
+
+          <div class="role-content">
+
+            <div class="role-icon">
+              🏠
+            </div>
+
+            <div class="role-title">
+              Community Member
+            </div>
+
+            <div class="role-description">
+              Request help, send SOS alerts and access safety services.
+            </div>
+
+          </div>
+
+        </label>
+
+        <label class="role-card">
+
+          <input
+            type="radio"
+            name="role"
+            value="patroller"
+          >
+
+          <div class="role-content">
+
+            <div class="role-icon">
+              🚓
+            </div>
+
+            <div class="role-title">
+              Patroller
+            </div>
+
+            <div class="role-description">
+              Respond to incidents and help protect the community.
+            </div>
+
+          </div>
+
+        </label>
+
+      </div>
+
+    </div>
+
+    <!-- Password -->
+    <div class="field">
+
+      <label class="label" for="password">
+        Password
+      </label>
+
+      <div class="input-wrap">
+
+        <span class="icon" aria-hidden="true">🔒</span>
+
+        <input
+          id="password"
+          type="password"
+          autocomplete="new-password"
+          placeholder="At least 6 characters"
+          required
+        >
+
+        <button
+          type="button"
+          class="password-toggle"
+          id="togglePassword"
+          aria-label="Show password"
+          title="Show password"
+        >
+          👁
+        </button>
+
+      </div>
+
+      <div
+        id="passwordMeter"
+        class="password-meter"
+      >
+
+        <div class="meter-bars">
+          <span class="meter-bar"></span>
+          <span class="meter-bar"></span>
+          <span class="meter-bar"></span>
+          <span class="meter-bar"></span>
+        </div>
+
+        <div
+          id="meterLabel"
+          class="meter-label"
+        >
+          Password strength
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Confirm password -->
+    <div class="field">
+
+      <label class="label" for="password2">
+        Confirm password
+      </label>
+
+      <div class="input-wrap">
+
+        <span class="icon" aria-hidden="true">🔐</span>
+
+        <input
+          id="password2"
+          type="password"
+          autocomplete="new-password"
+          placeholder="Enter password again"
+          required
+        >
+
+      </div>
+
+    </div>
+
+    <!-- Submit -->
+    <button
+      type="submit"
+      class="register-btn"
+      id="registerBtn"
+    >
+
+      <span class="btn-content">
+
+        <span class="spinner"></span>
+
+        <span id="buttonText">
+          Create account →
+        </span>
+
+      </span>
+
+    </button>
+
+  </form>
+
+  <div class="footer">
+    Already have an account?
+    <a href="/login">Sign in</a>
+  </div>
+
+  <div class="security-note">
+    <span class="security-dot"></span>
+    Your account information is protected
+  </div>
+
+</section>
+```
+
+  </main>
+
+  <script>
+    const form = document.getElementById("registerForm");
+
+    const nameInput = document.getElementById("name");
+    const emailInput = document.getElementById("email");
+    const phoneInput = document.getElementById("phone");
+    const addressInput = document.getElementById("address");
+
+    const passwordInput = document.getElementById("password");
+    const password2Input = document.getElementById("password2");
+
+    const togglePassword =
+      document.getElementById("togglePassword");
+
+    const registerBtn =
+      document.getElementById("registerBtn");
+
+    const buttonText =
+      document.getElementById("buttonText");
+
+    const errorBox =
+      document.getElementById("errorBox");
+
+    const pendingBox =
+      document.getElementById("pendingBox");
+
+    const passwordMeter =
+      document.getElementById("passwordMeter");
+
+    const meterLabel =
+      document.getElementById("meterLabel");
+
+    const meterBars =
+      document.querySelectorAll(".meter-bar");
+
+
+    /*
+      Message helpers
+    */
+
+    function clearMessages() {
+      errorBox.classList.remove("show");
+      pendingBox.classList.remove("show");
+
+      errorBox.textContent = "";
+      pendingBox.textContent = "";
+    }
+
+
+    function showError(message) {
+      pendingBox.classList.remove("show");
+
+      errorBox.textContent =
+        message || "Something went wrong.";
+
+      errorBox.classList.add("show");
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }
+
+
+    function showPending(message) {
+      errorBox.classList.remove("show");
+
+      pendingBox.textContent =
+        message ||
+        "Your patroller account is waiting for admin approval.";
+
+      pendingBox.classList.add("show");
+    }
+
+
+    /*
+      Loading state
+    */
+
+    function setLoading(loading) {
+      registerBtn.disabled = loading;
+
+      registerBtn.classList.toggle(
+        "loading",
+        loading
+      );
+
+      buttonText.textContent =
+        loading
+          ? "Creating account…"
+          : "Create account →";
+    }
+
+
+    /*
+      Password visibility
+    */
+
+    togglePassword.addEventListener(
+      "click",
+      () => {
+
+        const visible =
+          passwordInput.type === "text";
+
+        passwordInput.type =
+          visible
+            ? "password"
+            : "text";
+
+        togglePassword.textContent =
+          visible
+            ? "👁"
+            : "🙈";
+
+        togglePassword.setAttribute(
+          "aria-label",
+          visible
+            ? "Show password"
+            : "Hide password"
+        );
+
+      }
+    );
+
+
+    /*
+      Password strength indicator
+    */
+
+    passwordInput.addEventListener(
+      "input",
+      () => {
+
+        const password =
+          passwordInput.value;
+
+        if (!password) {
+          passwordMeter.classList.remove("show");
+          return;
+        }
+
+        passwordMeter.classList.add("show");
+
+        let score = 0;
+
+        if (password.length >= 6) {
+          score++;
+        }
+
+        if (password.length >= 10) {
+          score++;
+        }
+
+        if (/[A-Z]/.test(password)) {
+          score++;
+        }
+
+        if (/[0-9]/.test(password)) {
+          score++;
+        }
+
+        meterBars.forEach((bar, index) => {
+
+          bar.style.background =
+            index < score
+              ? "rgba(74, 222, 128, 0.8)"
+              : "rgba(255, 255, 255, 0.08)";
+
+        });
+
+        if (score <= 1) {
+          meterLabel.textContent =
+            "Password is weak";
+        }
+        else if (score === 2) {
+          meterLabel.textContent =
+            "Password is fair";
+        }
+        else if (score === 3) {
+          meterLabel.textContent =
+            "Password is good";
+        }
+        else {
+          meterLabel.textContent =
+            "Password is strong";
+        }
+
+      }
+    );
+
+
+    /*
+      Registration
+    */
+
+    form.addEventListener(
+      "submit",
+      async (event) => {
+
+        event.preventDefault();
+
+        clearMessages();
+
+        const name =
+          nameInput.value.trim();
+
+        const email =
+          emailInput.value.trim().toLowerCase();
+
+        const phone =
+          phoneInput.value.trim();
+
+        const address =
+          addressInput.value.trim();
+
+        const password =
+          passwordInput.value;
+
+        const password2 =
+          password2Input.value;
+
+        const selectedRole =
+          document.querySelector(
+            'input[name="role"]:checked'
+          );
+
+        const role =
+          selectedRole
+            ? selectedRole.value
+            : "client";
+
+
+        /*
+          Frontend validation
+        */
+
+        if (!name || !email || !password) {
+          showError(
+            "Please fill in your name, email and password."
+          );
+          return;
+        }
+
+
+        if (!email.includes("@")) {
+          showError(
+            "Please enter a valid email address."
+          );
+          return;
+        }
+
+
+        /*
+          Matches Flask:
+          len(password) < 6 => rejected
+        */
+
+        if (password.length < 6) {
+          showError(
+            "Your password must contain at least 6 characters."
+          );
+          return;
+        }
+
+
+        if (password !== password2) {
+          showError(
+            "Your passwords do not match."
+          );
+          password2Input.focus();
+          return;
+        }
+
+
+        setLoading(true);
+
+
+        /*
+          Send exactly what the backend expects.
+        */
+
+        const payload = {
+          name,
+          email,
+          phone,
+          address,
+          password,
+          role,
+
+          /*
+            Kept for compatibility with your
+            existing frontend data structure.
+          */
+          phoneId: email
+        };
+
+
+        try {
+
+          const response =
+            await fetch(
+              "/api/register",
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body:
+                  JSON.stringify(payload)
+              }
+            );
+
+
+          let data = {};
+
+          try {
+            data = await response.json();
+          }
+          catch {
+            data = {};
+          }
+
+
+          if (!response.ok) {
+
+            showError(
+              data.error ||
+              "Unable to create your account. Please try again."
+            );
+
+            return;
+          }
+
+
+          /*
+            Save local profile information for
+            your other frontend screens.
+          */
+
+          const user =
+            data.user || {
+              name,
+              email,
+              phone,
+              role
+            };
+
+
+          localStorage.setItem(
+            "zondi_user",
+            JSON.stringify(user)
+          );
+
+          localStorage.setItem(
+            "zondi_auth",
+            JSON.stringify({
+              email,
+              name,
+              role
+            })
+          );
+
+          localStorage.setItem(
+            "zondi_address",
+            address
+          );
+
+          localStorage.setItem(
+            "zondi_shopname",
+            name
+          );
+
+          localStorage.setItem(
+            "zondi_phone",
+            phone
+          );
+
+
+          /*
+            Patrollers are pending approval according
+            to the current backend.
+          */
+
+          if (
+            role === "patroller" ||
+            data.user?.status === "pending"
+          ) {
+
+            showPending(
+              "Your patroller account was created and is waiting for admin approval. You can sign in once an administrator approves it."
+            );
+
+            form.reset();
+
+            passwordMeter.classList.remove("show");
+
+            document
+              .querySelector(
+                'input[name="role"][value="client"]'
+              )
+              .checked = true;
+
+            return;
+          }
+
+
+          /*
+            Client registration succeeds immediately.
+          */
+
+          window.location.href = "/login";
+
+        }
+        catch (error) {
+
+          console.error(
+            "Registration error:",
+            error
+          );
+
+          showError(
+            "Unable to connect to Zondi. Please check your connection and try again."
+          );
+
+        }
+        finally {
+
+          setLoading(false);
+
+        }
+
+      }
+    );
+
+
+    /*
+      Focus the name field on desktop/mobile
+      when possible.
+    */
+
+    window.addEventListener(
+      "load",
+      () => {
+        nameInput.focus();
+      }
+    );
+  </script>
+
+</body>
+</html>
