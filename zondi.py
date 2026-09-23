@@ -1,5 +1,12 @@
+"""
+Zondi API v3 - PTT Radio like Eter T2770 + Dev Portal Approval
+Install: pip install flask flask-cors flask-socketio eventlet
+Run: python zondi_v3.py
+"""
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room, leave_room
 import json, os, threading
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,263 +14,273 @@ from werkzeug.utils import safe_join
 import uuid
 
 app = Flask(__name__, static_folder='.')
-CORS(app)  # Enable for mobile/web app clients
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'zondi-secret-change-me')
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False)
 
-# Config
-SOS_FILE = 'sos_feed.json'
-USERS_FILE = 'users.json'
-PATROLLER_FILE = 'patrollers_live.json'
-VOICE_FILE = 'radio_talk.json'
-ALLOWED_STATIC_EXTS = {'.html', '.js', '.css', '.json', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.map'}
-
-# Thread-safe file access
+FILES = {
+    'sos': 'sos_feed.json',
+    'users': 'users.json',
+    'patrollers': 'patrollers_live.json',
+    'voice': 'radio_talk.json'
+}
 file_lock = threading.Lock()
+# Track who is talking on which channel (T2770 logic: only 1 talker per channel)
+active_talkers = {}  # channel -> {email, started_at}
+channel_lock = threading.Lock()
 
 def load_json(f):
-    if not os.path.exists(f): 
-        return []
+    if not os.path.exists(f): return []
     try:
         with file_lock:
             with open(f, 'r', encoding='utf-8') as fh:
-                d = json.load(fh)
-                return d if isinstance(d, list) else []
-    except Exception as e:
-        print(f"Load error {f}: {e}")
-        return []
+                d=json.load(fh)
+                return d if isinstance(d,list) else []
+    except: return []
 
-def save_json(f, data):
-    try:
-        with file_lock:
-            # atomic write
-            tmp = f + '.tmp'
-            with open(tmp, 'w', encoding='utf-8') as fh:
-                json.dump(data, fh, indent=2)
-            os.replace(tmp, f)
-    except Exception as e:
-        print(f"Save error {f}: {e}")
+def save_json(f,data):
+    with file_lock:
+        tmp=f+'.tmp'
+        with open(tmp,'w',encoding='utf-8') as fh:
+            json.dump(data,fh,indent=2)
+        os.replace(tmp,f)
 
 def init_files():
-    for f in [SOS_FILE, USERS_FILE, PATROLLER_FILE, VOICE_FILE]:
-        if not os.path.exists(f): 
-            save_json(f, [])
+    for f in FILES.values():
+        if not os.path.exists(f): save_json(f, [])
 
-# === Helpers ===
 def sanitize_user(u):
-    """Never return password"""
-    return {k: v for k, v in u.items() if k != 'password'}
+    return {k:v for k,v in u.items() if k!='password'}
 
-# === Routes - Pages ===
+# ===== PAGES =====
 @app.route('/')
-def home(): 
-    return send_from_directory('.', 'login.html') if os.path.exists('login.html') else jsonify({"name": "Zondi API", "status": "running", "version": "2.0"})
+def home(): return send_from_directory('.', 'login.html') if os.path.exists('login.html') else jsonify({"name":"Zondi API v3 - T2770 Radio","status":"running"})
 
-@app.route('/login')
-@app.route('/login.html')
-def login_page(): return send_from_directory('.', 'login.html')
+for route in ['/login','/login.html','/register','/register.html','/clients','/clients.html','/patrollers','/patrol','/patrollers.html','/patrol.html','/admin','/admin.html','/dev','/dev.html','/radio','/radio.html']:
+    @app.route(route, endpoint=route)
+    def page_handler(route=route):
+        # strip leading /
+        fname = route.strip('/').split('.')[0] + '.html'
+        # map /dev and /admin to dev_portal.html if exists
+        if fname in ['admin.html','dev.html']:
+            if os.path.exists('dev_portal.html'): return send_from_directory('.', 'dev_portal.html')
+            if os.path.exists('admin.html'): return send_from_directory('.', 'admin.html')
+        if os.path.exists(fname): return send_from_directory('.', fname)
+        # fallback
+        base = fname.split('/')[0]
+        if os.path.exists(base): return send_from_directory('.', base)
+        return send_from_directory('.', 'login.html') if os.path.exists('login.html') else (f"Missing {fname}",404)
 
-@app.route('/register')
-@app.route('/register.html')
-def reg_page(): return send_from_directory('.', 'register.html')
-
-@app.route('/clients')
-@app.route('/clients.html')
-def clients_page(): return send_from_directory('.', 'clients.html')
-
-@app.route('/patrollers')
-@app.route('/patrol')
-@app.route('/patrollers.html')
-@app.route('/patrol.html')
-def patrol_page(): return send_from_directory('.', 'patrol.html')
-
-# === API - SOS ===
-@app.route('/api/sos', methods=['POST'])
-def api_sos():
-    data = request.get_json(silent=True) or {}
-    
-    # validation
-    if not data.get('phoneId') or not data.get('lat'):
-        return jsonify({"error": "phoneId and lat required"}), 400
-
-    data['id'] = str(uuid.uuid4())
-    data['time'] = datetime.now().isoformat()
-    
-    feed = load_json(SOS_FILE)
-    feed.append(data)
-    if len(feed) > 1000: 
-        feed = feed[-1000:]
-    save_json(SOS_FILE, feed)
-    return jsonify({"ok": True, "id": data['id']})
-
-@app.route('/api/sos-feed')
-def api_feed(): 
-    limit = request.args.get('limit', 300, type=int)
-    limit = min(max(limit, 1), 500)
-    return jsonify(load_json(SOS_FILE)[-limit:])
-
-@app.route('/api/tracking/<phone_id>')
-def api_tracking(phone_id):
-    if not phone_id or len(phone_id) > 100:
-        return jsonify({"error": "invalid phoneId"}), 400
-    feed = load_json(SOS_FILE)
-    filtered = [x for x in feed if x.get('phoneId') == phone_id and x.get('lat')][-100:]
-    return jsonify(filtered)
-
-# === API - Patrollers Live ===
-@app.route('/api/patroller-ping', methods=['POST'])
-def pp():
-    d = request.get_json(silent=True) or {}
-    if not d.get('email'):
-        return jsonify({"error": "email required"}), 400
-    
-    d['time'] = datetime.now().isoformat()
-    d['email'] = d['email'].lower().strip()
-    
-    data = load_json(PATROLLER_FILE)
-    data = [x for x in data if x.get('email') != d.get('email')]
-    data.append(d)
-    save_json(PATROLLER_FILE, data)
-    return jsonify({"ok": True})
-
-@app.route('/api/patrollers-live')
-def pl():
-    data = load_json(PATROLLER_FILE)
-    cutoff = datetime.now() - timedelta(minutes=5)
-    fresh = []
-    for p in data:
-        try:
-            t = datetime.fromisoformat(p.get('time', ''))
-            if t > cutoff:
-                fresh.append(p)
-        except:
-            # keep if no time but don't break
-            continue
-    return jsonify(fresh)
-
-# === API - Auth UPGRADED ===
-@app.route('/api/login', methods=['POST'])
-def api_login():
-    d = request.get_json(silent=True) or {}
-    email = d.get('email', '').lower().strip()
-    pwd = d.get('password', '')
-    
-    if not email or not pwd:
-        return jsonify({"error": "Email and password required"}), 400
-
-    users = load_json(USERS_FILE)
-    u = next((x for x in users if x.get('email', '').lower() == email), None)
-    
-    if not u:
-        return jsonify({"error": "Wrong email or password"}), 401
-
-    # support both old plain text and new hashed
-    stored_pwd = u.get('password', '')
-    is_valid = False
-    if stored_pwd.startswith('pbkdf2:') or stored_pwd.startswith('scrypt:'):
-        is_valid = check_password_hash(stored_pwd, pwd)
-    else:
-        is_valid = (stored_pwd == pwd)  # legacy support, will upgrade on login
-        if is_valid:
-            # auto-upgrade to hashed
-            u['password'] = generate_password_hash(pwd)
-            # save updated user list
-            save_json(USERS_FILE, users)
-
-    if not is_valid:
-        return jsonify({"error": "Wrong email or password"}), 401
-
-    return jsonify(sanitize_user(u))
-
+# ===== AUTH - WITH APPROVAL STATUS =====
 @app.route('/api/signup', methods=['POST'])
 @app.route('/api/register', methods=['POST'])
 def api_reg():
-    d = request.get_json(silent=True) or {}
-    email = d.get('email', '').lower().strip()
-    password = d.get('password', '')
-    role = d.get('role', 'client').lower()  # client / patroller / admin
+    d=request.get_json(silent=True) or {}
+    email=d.get('email','').lower().strip()
+    pwd=d.get('password','')
+    role=d.get('role','client').lower()
 
-    if not email or not password:
-        return jsonify({"error": "Email and password required"}), 400
-    if len(password) < 6:
-        return jsonify({"error": "Password must be at least 6 characters"}), 400
+    if not email or not pwd: return jsonify({"error":"Email and password required"}),400
+    if len(pwd)<6: return jsonify({"error":"Password min 6 chars"}),400
 
-    users = load_json(USERS_FILE)
-    if any(x.get('email', '').lower() == email for x in users):
-        return jsonify({"error": "Email already registered. Go to Login"}), 400
+    users=load_json(FILES['users'])
+    if any(x.get('email','').lower()==email for x in users):
+        return jsonify({"error":"Email already registered"}),400
 
-    # hash password
-    hashed = generate_password_hash(password)
-    new_user = {
+    new_user={
         "id": str(uuid.uuid4()),
         "email": email,
-        "password": hashed,
+        "password": generate_password_hash(pwd),
         "role": role,
-        "name": d.get('name', ''),
-        "phone": d.get('phone', ''),
+        "name": d.get('name',''),
+        "phone": d.get('phone',''),
+        "status": "approved" if role=='client' else "pending", # clients auto-approved, patrollers need YOU
         "created_at": datetime.now().isoformat()
     }
-    # keep extra fields if provided but don't override secured ones
-    for k, v in d.items():
-        if k not in new_user:
-            new_user[k] = v
-    new_user['password'] = hashed
-    new_user['email'] = email
-
     users.append(new_user)
-    save_json(USERS_FILE, users)
-    return jsonify({"ok": True, "user": sanitize_user(new_user)}), 201
+    save_json(FILES['users'], users)
+    return jsonify({"ok":True,"user":sanitize_user(new_user),"message":"Patroller account pending approval by admin" if role=='patroller' else "Registered"}),201
 
-# === RADIO T720 VOICE ===
-@app.route('/api/radio/talk', methods=['POST'])
-def radio_talk_post():
-    d = request.get_json(silent=True) or {}
-    if not d.get('channel') or not d.get('sender'):
-        return jsonify({"error": "channel and sender required"}), 400
-
-    d['id'] = str(uuid.uuid4())
-    d['time'] = datetime.now().isoformat()
-    feed = load_json(VOICE_FILE)
-    feed.append(d)
-    if len(feed) > 50: 
-        feed = feed[-50:]
-    save_json(VOICE_FILE, feed)
-    return jsonify({"ok": True, "id": d['id']})
-
-@app.route('/api/radio/talk', methods=['GET'])
-def radio_talk_get():
-    channel = request.args.get('channel')
-    limit = request.args.get('limit', 20, type=int)
-    limit = min(max(limit, 1), 50)
-    feed = load_json(VOICE_FILE)[-limit:]
-    if channel:
-        feed = [x for x in feed if str(x.get('channel')) == str(channel)]
-    return jsonify(feed)
-
-# === Secure Static File Serving ===
-@app.route('/<path:path>')
-def catch_all(path):
-    # API 404
-    if path.startswith('api/'): 
-        return jsonify({"error": "not found"}), 404
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    d=request.get_json(silent=True) or {}
+    email=d.get('email','').lower().strip()
+    pwd=d.get('password','')
+    users=load_json(FILES['users'])
+    u=next((x for x in users if x.get('email','').lower()==email),None)
+    if not u or not check_password_hash(u.get('password',''), pwd):
+        # legacy plain support
+        if u and u.get('password','')==pwd:
+            u['password']=generate_password_hash(pwd)
+            save_json(FILES['users'], users)
+        else:
+            return jsonify({"error":"Wrong email or password"}),401
     
-    # Security: prevent directory traversal
-    if '..' in path or path.startswith('/'):
-        return jsonify({"error": "invalid path"}), 400
+    # CHECK APPROVAL
+    if u.get('role')=='patroller' and u.get('status')!='approved':
+        return jsonify({"error":f"Account {u.get('status')}. Wait for admin approval","status":u.get('status')}),403
 
-    # Only allow specific file types
-    _, ext = os.path.splitext(path)
-    if ext.lower() not in ALLOWED_STATIC_EXTS and ext != '':
-        # if it's a frontend route, serve login.html
-        return send_from_directory('.', 'login.html')
+    return jsonify(sanitize_user(u))
 
-    full_path = safe_join('.', path)
-    if full_path and os.path.exists(full_path) and os.path.isfile(full_path):
-        return send_from_directory('.', path)
+# ===== DEV PORTAL - APPROVE PATROLLERS =====
+@app.route('/api/admin/pending')
+def admin_pending():
+    # Simple auth via query ?admin_key=YOUR_SECRET
+    if request.args.get('admin_key')!=os.environ.get('ADMIN_KEY','zondi_admin_123'):
+        return jsonify({"error":"unauthorized - set ADMIN_KEY env"}),401
+    users=load_json(FILES['users'])
+    pending=[sanitize_user(x) for x in users if x.get('role')=='patroller' and x.get('status')=='pending']
+    all_patrollers=[sanitize_user(x) for x in users if x.get('role')=='patroller']
+    return jsonify({"pending":pending,"all_patrollers":all_patrollers})
+
+@app.route('/api/admin/approve', methods=['POST'])
+def admin_approve():
+    d=request.get_json(silent=True) or {}
+    if d.get('admin_key')!=os.environ.get('ADMIN_KEY','zondi_admin_123'):
+        return jsonify({"error":"unauthorized"}),401
+    email=d.get('email','').lower().strip()
+    action=d.get('action','approve') # approve / reject / revoke
+    users=load_json(FILES['users'])
+    found=False
+    for u in users:
+        if u.get('email','').lower()==email and u.get('role')=='patroller':
+            if action=='approve': u['status']='approved'
+            elif action=='reject': u['status']='rejected'
+            elif action=='revoke': u['status']='pending'
+            found=True
+    if not found: return jsonify({"error":"patroller not found"}),404
+    save_json(FILES['users'], users)
+    return jsonify({"ok":True,"action":action,"email":email})
+
+# ===== SOS & TRACKING (same as before, thread-safe) =====
+@app.route('/api/sos', methods=['POST'])
+def api_sos():
+    data=request.get_json(silent=True) or {}
+    if not data.get('phoneId'): return jsonify({"error":"phoneId required"}),400
+    data['id']=str(uuid.uuid4()); data['time']=datetime.now().isoformat()
+    feed=load_json(FILES['sos']); feed.append(data)
+    if len(feed)>1000: feed=feed[-1000:]
+    save_json(FILES['sos'], feed)
+    # BROADCAST SOS LIVE TO ALL PATROLLERS
+    socketio.emit('new_sos', data, room='patrollers_room')
+    return jsonify({"ok":True,"id":data['id']})
+
+@app.route('/api/sos-feed')
+def api_feed():
+    return jsonify(load_json(FILES['sos'])[-300:])
+
+@app.route('/api/tracking/<phone_id>')
+def api_tracking(phone_id):
+    feed=load_json(FILES['sos'])
+    return jsonify([x for x in feed if x.get('phoneId')==phone_id and x.get('lat')][-100:])
+
+@app.route('/api/patroller-ping', methods=['POST'])
+def pp():
+    d=request.get_json(silent=True) or {}
+    if not d.get('email'): return jsonify({"error":"email required"}),400
+    d['time']=datetime.now().isoformat(); d['email']=d['email'].lower().strip()
+    # check if approved patroller
+    users=load_json(FILES['users'])
+    u=next((x for x in users if x.get('email','').lower()==d['email'] and x.get('role')=='patroller' and x.get('status')=='approved'),None)
+    if not u: return jsonify({"error":"Not an approved patroller"}),403
+
+    data=load_json(FILES['patrollers'])
+    data=[x for x in data if x.get('email')!=d.get('email')]
+    data.append(d)
+    save_json(FILES['patrollers'], data)
+    socketio.emit('patroller_update', d, room='patrollers_room')
+    return jsonify({"ok":True})
+
+@app.route('/api/patrollers-live')
+def pl():
+    data=load_json(FILES['patrollers'])
+    cutoff=datetime.now()-timedelta(minutes=5)
+    fresh=[]
+    for p in data:
+        try:
+            if datetime.fromisoformat(p.get('time',''))>cutoff: fresh.append(p)
+        except: pass
+    return jsonify(fresh)
+
+# ===== T2770 STYLE PTT RADIO - SOCKET.IO =====
+@socketio.on('join_channel')
+def handle_join(data):
+    channel=str(data.get('channel','1'))
+    email=data.get('email','anonymous')
+    join_room(f"channel_{channel}")
+    join_room('patrollers_room')
+    emit('channel_joined', {"channel":channel,"email":email}, room=request.sid)
+    # notify others
+    emit('user_joined_channel', {"channel":channel,"email":email}, room=f"channel_{channel}", include_self=False)
+    print(f"{email} joined channel {channel}")
+
+@socketio.on('leave_channel')
+def handle_leave(data):
+    channel=str(data.get('channel','1'))
+    leave_room(f"channel_{channel}")
+    emit('user_left_channel', {"channel":channel,"email":data.get('email')}, room=f"channel_{channel}")
+
+@socketio.on('ptt_start')
+def handle_ptt_start(data):
+    channel=str(data.get('channel','1'))
+    email=data.get('email','')
+    with channel_lock:
+        current=active_talkers.get(channel)
+        if current and (datetime.now() - current['started_at']).seconds < 30:
+            # Channel busy - T2770 behavior
+            emit('channel_busy', {"channel":channel,"busy_by":current['email']}, room=request.sid)
+            return
+        # Claim channel
+        active_talkers[channel]={"email":email,"started_at":datetime.now()}
     
-    # SPA fallback
-    return send_from_directory('.', 'login.html') if os.path.exists('login.html') else jsonify({"error": "not found"}), 404
+    emit('ptt_started', {"channel":channel,"email":email}, room=f"channel_{channel}", include_self=False)
+    emit('ptt_granted', {"channel":channel}, room=request.sid)
 
-if __name__ == '__main__':
+@socketio.on('ptt_audio')
+def handle_ptt_audio(data):
+    # data: {channel, audio (base64), email}
+    channel=str(data.get('channel','1'))
+    # only allow if this user owns the channel
+    with channel_lock:
+        owner=active_talkers.get(channel)
+        if not owner or owner['email']!=data.get('email'):
+            emit('ptt_denied', {"reason":"not owner"}, room=request.sid)
+            return
+    # Broadcast audio chunk to everyone in channel except sender
+    emit('audio_chunk', data, room=f"channel_{channel}", include_self=False)
+
+@socketio.on('ptt_end')
+def handle_ptt_end(data):
+    channel=str(data.get('channel','1'))
+    email=data.get('email','')
+    with channel_lock:
+        owner=active_talkers.get(channel)
+        if owner and owner['email']==email:
+            del active_talkers[channel]
+    emit('ptt_ended', {"channel":channel,"email":email}, room=f"channel_{channel}", include_self=False)
+    emit('ptt_released', {"channel":channel}, room=request.sid)
+
+# Keep old HTTP radio for text messages
+@app.route('/api/radio/talk', methods=['POST','GET'])
+def radio_http():
+    if request.method=='POST':
+        d=request.get_json(silent=True) or {}
+        d['id']=str(uuid.uuid4()); d['time']=datetime.now().isoformat()
+        feed=load_json(FILES['voice']); feed.append(d)
+        if len(feed)>50: feed=feed[-50:]
+        save_json(FILES['voice'], feed)
+        socketio.emit('text_message', d, room=f"channel_{d.get('channel','1')}")
+        return jsonify({"ok":True})
+    else:
+        channel=request.args.get('channel')
+        feed=load_json(FILES['voice'])[-20:]
+        if channel: feed=[x for x in feed if str(x.get('channel'))==str(channel)]
+        return jsonify(feed)
+
+if __name__=='__main__':
     init_files()
-    port = int(os.environ.get('PORT', 10000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    print("Zondi v3 - T2770 Radio Running")
+    print("Admin key:", os.environ.get('ADMIN_KEY','zondi_admin_123'))
+    print("Dev portal: /dev.html or /admin.html")
+    print("Radio: /radio.html")
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT',10000)), debug=False)
