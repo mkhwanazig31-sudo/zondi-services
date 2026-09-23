@@ -4,7 +4,7 @@ body{margin:0;font-family:system-ui;background:#0f172a;min-height:100vh}
 .phone{max-width:420px;margin:0 auto;min-height:100vh;background:#38bdf8;position:relative;display:flex;flex-direction:column}
 .nav{padding:10px 14px;background:rgba(0,0,0,.2);color:#fff;display:flex;justify-content:space-between;align-items:center}
 .grid{padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;position:relative;z-index:1}
-.app{text-align:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.app{text-align:center;cursor:pointer}
 .app.ico{width:64px;height:64px;margin:0 auto;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fff;box-shadow:0 4px 10px rgba(0,0,0,.2)}
 .app span{font-size:10px;font-weight:700;color:#fff;display:block;margin-top:5px}
 .win{position:absolute;inset:0;z-index:50;background:#fff;display:none;flex-direction:column}
@@ -18,55 +18,69 @@ body{margin:0;font-family:system-ui;background:#0f172a;min-height:100vh}
 .map-tools button{width:36px;height:36px;border:0;border-radius:8px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2);font-size:18px;cursor:pointer}
 .search-bar{display:flex;gap:6px;padding:8px;background:#f8fafc;border-bottom:1px solid #e2e8f0}
 .search-bar input{flex:1;padding:8px 12px;border-radius:20px;border:1px solid #cbd5e1;font-size:12px}
-.legend{position:absolute;bottom:10px;left:10px;z-index:400;background:rgba(255,255,255,.95);padding:8px 10px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:11px;max-width:170px;max-height:140px;overflow-y:auto}
+.legend{position:absolute;bottom:10px;left:10px;z-index:400;background:rgba(255,255,255,.95);padding:8px 10px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:11px;max-width:170px;max-height:160px;overflow-y:auto}
 .legend b{display:block;margin-bottom:4px}
 .legend-item{display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer}
 .legend-dot{width:8px;height:8px;border-radius:50%;background:#22c55e}
+.log-item{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:11px;display:flex;gap:8px;align-items:center}
+.log-dot{width:8px;height:8px;background:#3b82f6;border-radius:50%;flex-shrink:0}
 </style></head><body>
 <script>
 let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null');
 if(!auth || auth.role!=='patroller'){ if(!auth) location.href='/login'; }
 </script>
 <div class="phone">
-<div class="nav"><div><b>🛡️ ZONDI PATROL OS</b><br><span style="font-size:10px"><span class="live-dot"></span> LIVE • <span id="clientCount">0 clients</span></span></div><button onclick="localStorage.clear();location.href='/login'" style="padding:6px 10px;border-radius:20px;border:0;font-size:11px">Logout</button></div>
+<div class="nav"><div><b>🛡️ ZONDI PATROL OS</b><br><span style="font-size:10px"><span class="live-dot"></span> LIVE • <span id="clientCount">0 clients</span> • <span id="mapType">SATELLITE</span></span></div><button onclick="localStorage.clear();location.href='/login'" style="padding:6px 10px;border-radius:20px;border:0;font-size:11px">Logout</button></div>
 <div class="grid">
 <div class="app" onclick="openWin('tracker')"><div class="ico">🛰️</div><span>Tracker</span></div>
 <div class="app" onclick="openWin('sos')"><div class="ico" style="background:#fee2e2">🚨</div><span>SOS Feed</span></div>
+<div class="app" onclick="openWin('logs')"><div class="ico" style="background:#fef3c7">📜</div><span>Map Logs</span></div>
 <div class="app" onclick="openWin('clients')"><div class="ico" style="background:#dcfce7">📍</div><span>Client Pins</span></div>
 <div class="app" onclick="alert('Radio PTT coming')"><div class="ico" style="background:#e9d5ff">📻</div><span>Radio PTT</span></div>
 <div class="app" onclick="openWin('list')"><div class="ico">👥</div><span>Clients List</span></div>
-<div class="app" onclick="openWin('settings')"><div class="ico">⚙️</div><span>Settings</span></div>
 </div>
 <div id="win-tracker" class="win">
-<div class="win-h"><b>🛰️ Tracker</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div>
+<div class="win-h"><b>🛰️ Tracker - REAL HOUSES</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div>
 <div class="search-bar"><input id="clientSearch" placeholder="🔍 Search client..." oninput="filterClients(this.value)"><button onclick="locateMe()" style="padding:6px 10px;border-radius:20px;border:0;background:#0f172a;color:#fff;font-size:11px">📍 Me</button></div>
 <div id="map">
 <div class="map-tools">
 <button onclick="map.zoomIn()">+</button>
 <button onclick="map.zoomOut()">−</button>
+<button onclick="toggleMap()" id="toggleBtn" style="font-size:12px;font-weight:800">🗺️</button>
 <button onclick="map.setView([-25.60215,27.9799],14)">⌖</button>
 </div>
 <div id="legend" class="legend"><b>🟢 Active Now</b><div id="legendList" style="font-size:10px;color:#64748b">No clients yet</div></div>
 </div>
-<div style="padding:8px;background:#f1f5f9;font-size:11px;display:flex;gap:6px;align-items:center"><span id="lastUpdate">Updating...</span><button onclick="clearTrails()" style="margin-left:auto;padding:5px 10px;border-radius:8px;border:1px solid #fecaca;background:#fee2e2;color:#b91c1c;font-weight:700">🧹 Clear Trail</button></div>
+<div style="padding:8px;background:#f1f5f9;font-size:11px;display:flex;gap:6px;align-items:center"><span id="lastUpdate">Updating...</span><button onclick="clearTrails()" style="margin-left:auto;padding:5px 10px;border-radius:8px;border:1px solid #fecaca;background:#fee2e2;color:#b91c1c;font-weight:700">🧹 Clear</button></div>
 </div>
 <div id="win-sos" class="win"><div class="win-h"><b>🚨 SOS Feed</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div id="sosList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
+<div id="win-logs" class="win"><div class="win-h"><b>📜 Map Logs - Movements</b><div style="display:flex;gap:6px"><button onclick="document.getElementById('logsList').innerHTML=''" style="border:0;border-radius:8px;padding:6px 8px;background:#fee2e2;color:#b91c1c;font-size:11px">Clear</button><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div></div><div id="logsList" style="padding:0;overflow-y:auto;flex:1"></div></div>
 <div id="win-clients" class="win"><div class="win-h"><b>📍 Client Pins</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div id="pinList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
 <div id="win-list" class="win"><div class="win-h"><b>👥 All Clients</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div id="allList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
-<div id="win-settings" class="win"><div class="win-h"><b>⚙️ Settings</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div style="padding:16px;font-size:13px" id="setBox"></div></div>
 </div>
 <script>
 let map = L.map('map',{zoomControl:false}).setView([-25.60215,27.9799],14);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-let clientMarkers = {}; let clientTrails = {}; let clientDots = {}; let clientHistories = {}; let allClients = {}; let myPos=null;
-function openWin(n){console.log('open',n); document.querySelectorAll('.win').forEach(w=>w.classList.remove('open')); document.getElementById('win-'+n).classList.add('open'); setTimeout(()=>map.invalidateSize(),300);}
+// SATELLITE REAL HOUSES
+let satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19, attribution:'Esri'}).addTo(map);
+let streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
+let isSat = true;
+function toggleMap(){ if(isSat){ map.removeLayer(satLayer); streetLayer.addTo(map); document.getElementById('mapType').innerText='STREETS'; document.getElementById('toggleBtn').innerText='🛰️'; }else{ map.removeLayer(streetLayer); satLayer.addTo(map); document.getElementById('mapType').innerText='SATELLITE'; document.getElementById('toggleBtn').innerText='🗺️'; } isSat=!isSat; }
+
+let clientMarkers = {}; let clientTrails = {}; let clientDots = {}; let clientHistories = {}; let allClients = {}; let myPos=null; let mapLogs=[];
+function openWin(n){ document.querySelectorAll('.win').forEach(w=>w.classList.remove('open')); document.getElementById('win-'+n).classList.add('open'); setTimeout(()=>map.invalidateSize(),300);}
 function closeWin(){document.querySelectorAll('.win').forEach(w=>w.classList.remove('open'));}
 function clearTrails(){ Object.values(clientDots).forEach(arr=>arr.forEach(d=>{ try{map.removeLayer(d)}catch(e){} })); Object.values(clientTrails).forEach(t=>t.setLatLngs([])); Object.keys(clientDots).forEach(k=>clientDots[k]=[]); Object.keys(clientHistories).forEach(k=>clientHistories[k]=[]); }
-function locateMe(){ if(myPos) map.setView(myPos,16); else alert('Getting location...'); }
-function goToClient(lat,lng){ map.setView([lat,lng],17); openWin('tracker'); }
+function locateMe(){ if(myPos) map.setView(myPos,17); else alert('Getting location...'); }
+function goToClient(lat,lng){ map.setView([lat,lng],18); openWin('tracker'); }
 function getDirections(lat,lng){ if(myPos) window.open(`https://www.google.com/maps/dir/${myPos[0]},${myPos[1]}/${lat},${lng}/`,'_blank'); else window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,'_blank'); }
-function filterClients(q){ q=q.toLowerCase(); let filtered = Object.values(allClients).filter(c=> (c.name||'').toLowerCase().includes(q) || (c.phoneId||'').toLowerCase().includes(q) ); if(!q){ document.getElementById('pinList').innerHTML = buildClientList(Object.values(allClients)); return; } document.getElementById('pinList').innerHTML = buildClientList(filtered); }
+function filterClients(q){ q=q.toLowerCase(); let filtered = Object.values(allClients).filter(c=> (c.name||'').toLowerCase().includes(q) || (c.phoneId||'').toLowerCase().includes(q) ); document.getElementById('pinList').innerHTML = buildClientList(q? filtered : Object.values(allClients)); }
 function buildClientList(list){ return list.map(c=>`<div style="padding:10px;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:8px;font-size:12px;background:#fff"><div style="display:flex;justify-content:space-between"><b>📍 ${c.name||c.phoneId.substring(0,8)}</b><span style="color:#22c55e;font-size:10px">● LIVE</span></div><div style="color:#64748b;font-size:11px;margin:2px 0">${c.address||''}<br>🕒 ${new Date(c.time).toLocaleString('en-ZA',{hour:'2-digit',minute:'2-digit'})}</div><div style="display:flex;gap:6px;margin-top:6px"><button onclick="goToClient(${c.lat},${c.lng})" style="flex:1;padding:7px;border-radius:8px;border:0;background:#0f172a;color:#fff;font-size:11px">👁️ View</button><button onclick="getDirections(${c.lat},${c.lng})" style="flex:1;padding:7px;border-radius:8px;border:0;background:#2563eb;color:#fff;font-size:11px">🧭 Directions</button></div></div>`).join('') || '<div style="padding:20px;text-align:center;color:#94a3b8">No match</div>'; }
+function addMapLog(c,timeFull){
+  mapLogs.unshift({name:c.name||c.phoneId, time:timeFull, addr:c.address||'', lat:c.lat, lng:c.lng});
+  if(mapLogs.length>50) mapLogs.pop();
+  document.getElementById('logsList').innerHTML = mapLogs.map(l=>`<div class="log-item" onclick="goToClient(${l.lat},${l.lng})"><span class="log-dot"></span><div style="flex:1"><b>${l.name}</b> moved<br><small style="color:#64748b">${l.time} • ${l.addr}</small></div><span style="font-size:14px">📍</span></div>`).join('');
+}
+
 async function loadSOS(){
  try{
   let res = await fetch('/api/sos-feed'); let feed = await res.json(); if(!feed.length) return;
@@ -81,8 +95,9 @@ async function loadSOS(){
       let icon = L.divIcon({html:`<div style="background:#ef4444;color:#fff;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:800;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);white-space:nowrap">📍 ${c.name||c.phoneId.substring(0,6)}</div>`,className:'',iconSize:null});
       clientMarkers[c.phoneId]=L.marker([lat,lng],{icon:icon}).addTo(map);
       clientMarkers[c.phoneId].bindPopup(`<b>${c.name||'Client'}</b><br>${c.address||''}<br><small>🕒 ${timeFull}</small><br><div style="margin-top:6px;display:flex;gap:6px"><a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" style="padding:6px 10px;background:#111;color:#fff;border-radius:6px;text-decoration:none;font-size:11px">Open</a><a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" style="padding:6px 10px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-size:11px">🧭 Directions</a></div>`);
-      clientTrails[c.phoneId]=L.polyline([[lat,lng]],{color:'#2563eb',weight:4,opacity:0.8}).addTo(map);
+      clientTrails[c.phoneId]=L.polyline([[lat,lng]],{color:'#3b82f6',weight:4,opacity:0.9}).addTo(map);
       clientDots[c.phoneId]=[]; clientHistories[c.phoneId]=[{lat,lng}];
+      addMapLog(c,timeFull);
     }else{
       let last = clientHistories[c.phoneId][clientHistories[c.phoneId].length-1];
       let moved =!last || Math.abs(last.lat-lat)>0.00018 || Math.abs(last.lng-lng)>0.00018;
@@ -94,6 +109,7 @@ async function loadSOS(){
         dot.bindPopup(`<div style="font-size:11px"><b>° ${timeFull}</b><br>${c.address||''}</div>`);
         clientDots[c.phoneId].push(dot); clientHistories[c.phoneId].push({lat,lng});
         if(clientDots[c.phoneId].length>12){ let old=clientDots[c.phoneId].shift(); map.removeLayer(old); clientHistories[c.phoneId].shift(); }
+        addMapLog(c,timeFull);
       }
     }
   });
