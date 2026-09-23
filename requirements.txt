@@ -1,2 +1,5 @@
-flask
+Flask
+Flask-Cors
+Flask-SocketIO
+eventlet
 gunicorn
