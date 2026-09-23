@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f8f6f3">
+<title>Zondi Patrol - Welcoming</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Plus Jakarta Sans',system-ui}
+body{background:#f8f6f3;color:#2d2a26;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:#ffffff;border-bottom:1px solid #eee8e0;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 20px rgba(0,0,0,.04)}
+.header-left{display:flex;align-items:center;gap:10px}
+.avatar{width:38px;height:38px;background:linear-gradient(135deg,#22c55e,#86efac);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:800}
+.badge{padding:6px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.3px}
+.badge-live{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.badge-ch{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
+#map{flex:1;min-height:340px;z-index:1}
+.panel{background:#ffffff;border-top-left-radius:24px;border-top-right-radius:24px;margin-top:-18px;z-index:2;box-shadow:0 -8px 40px rgba(0,0,0,.08);display:flex;flex-direction:column;max-height:48vh;border:1px solid #f0ebe4}
+.handle{width:36px;height:5px;background:#e7ddd3;border-radius:10px;margin:10px auto}
+.tabs{display:flex;padding:0 8px;gap:6px;border-bottom:1px solid #f5f0eb}
+.tab{flex:1;padding:12px 8px;text-align:center;cursor:pointer;border-radius:12px 12px 0 0;font-size:13px;font-weight:700;color:#9a9590;transition:.2s;border-bottom:2px solid transparent}
+.tab.active{color:#2d2a26;background:#f8f6f3;border-bottom:2px solid #22c55e}
+.tab-content{display:none;padding:14px;overflow-y:auto;flex:1}
+.tab-content.active{display:block}
+.sos-card{background:#fffaf5;border:1px solid #f5e6d3;border-radius:16px;padding:12px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start;transition:.2s;cursor:pointer}
+.sos-card:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,0,0,.06)}
+.sos-card.new{border-color:#fca5a5;background:#fef2f2;animation:softPulse 2s infinite}
+@keyframes softPulse{0%{box-shadow:0 0 0 0 #fecaca}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.sos-icon{width:40px;height:40px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.sos-info{flex:1}
+.sos-info b{font-size:14px;color:#2d2a26}
+.sos-info small{color:#8b8680;font-size:12px;display:block;margin-top:2px}
+.btn-view{padding:6px 12px;border-radius:20px;background:#f8f6f3;border:1px solid #e7ddd3;font-size:11px;font-weight:700;color:#57534e;cursor:pointer;margin-top:6px}
+#pttArea{background:#f8f6f3;border-radius:20px;padding:14px;border:1px solid #f0ebe4}
+#pttBtn{width:100%;height:104px;border-radius:18px;border:0;background:#ffffff;color:#9a9590;font-size:18px;font-weight:800;box-shadow:0 4px 20px rgba(0,0,0,.06), inset 0 1px 0 #fff;border:1px solid #eee8e0;transition:.15s;cursor:pointer;user-select:none}
+#pttBtn.talking{background:linear-gradient(180deg,#ff6b6b,#ef4444);color:#fff;transform:scale(.98);box-shadow:0 8px 30px #ff6b6b44}
+#pttBtn.granted{background:linear-gradient(180deg,#4ade80,#22c55e);color:#fff}
+#pttBtn:active{transform:scale(.97)}
+.status-row{display:flex;justify-content:center;gap:8px;align-items:center;margin-top:10px;font-size:12px;color:#8b8680}
+.dot{width:8px;height:8px;border-radius:50%;background:#e7ddd3}
+.dot.live{background:#22c55e;box-shadow:0 0 0 4px #dcfce7;animation:pulse 1.5s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #dcfce7}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.log{background:#fcfaf8;border:1px solid #f0ebe4;border-radius:14px;padding:10px;height:110px;overflow-y:auto;font-size:12px;margin-top:10px}
+.select-wrap{position:relative;flex:1}
+select{width:100%;padding:12px 14px;border-radius:12px;background:#ffffff;border:1px solid #e7ddd3;color:#2d2a26;font-weight:600;font-size:13px;appearance:none}
+.btn-join{padding:12px 20px;border-radius:12px;background:#2d2a26;color:#fff;border:0;font-weight:700;font-size:13px;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <div class="avatar">🛡️</div>
+    <div>
+      <div style="font-weight:800;font-size:14px">ZONDI PATROL</div>
+      <div style="font-size:11px;color:#9a9590">{{ user.username }}</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px">
+    <span id="channelBadge" class="badge badge-ch">CH 1</span>
+    <span id="liveCount" class="badge badge-live">0 patrollers</span>
+  </div>
+</header>
+
+<div id="map"></div>
+
+<div class="panel">
+  <div class="handle"></div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(event,'sos')">🚨 SOS Feed</div>
+    <div class="tab" onclick="switchTab(event,'radio')">📻 Radio</div>
+    <div class="tab" onclick="switchTab(event,'patrollers')">👮 Live</div>
+  </div>
+
+  <div id="tab-sos" class="tab-content active">
+    <div id="sosList" style="display:flex;flex-direction:column;gap:2px">Loading SOS...</div>
+  </div>
+
+  <div id="tab-radio" class="tab-content">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div class="select-wrap">
+        <select id="channelSel">
+          <option value="1">🌿 CH1 • Ga-Rankuwa</option>
+          <option value="2">🏘️ CH2 • Mabopane</option>
+          <option value="3">🌳 CH3 • Soshanguve</option>
+          <option value="7">🚨 CH7 • Emergency</option>
+        </select>
+      </div>
+      <button class="btn-join" onclick="changeChannel()">Join</button>
+    </div>
+
+    <div id="pttArea">
+      <button id="pttBtn" onmousedown="pttStart()" onmouseup="pttStop()" ontouchstart="pttStart(); event.preventDefault()" ontouchend="pttStop(); event.preventDefault()">
+        🎙️ Hold to Talk
+      </button>
+      <div class="status-row">
+        <div id="talkDot" class="dot"></div>
+        <span id="talkerBadge">Ready to talk</span>
+        <span style="margin-left:auto;color:#c4bdb5;font-size:11px" id="pttStatus">Release to listen • T2770</span>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;font-size:12px;font-weight:700;color:#2d2a26">Channel activity</div>
+    <div id="radioLog" class="log"></div>
+  </div>
+
+  <div id="tab-patrollers" class="tab-content">
+    <div id="patrollerList" style="font-size:13px;color:#6b7280">Loading live patrollers...</div>
+  </div>
+</div>
+
+<script>
+// Keep your original logic, just welcoming UI
+let map = L.map('map',{zoomControl:false}).setView([-25.60, 28.02], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+let sosMarkers={}, patrollerMarkers={};
+let currentChannel='1', isTalking=false, mediaRecorder=null;
+const socket = io();
+
+function switchTab(e,name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  e.target.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  setTimeout(()=>map.invalidateSize(),100);
+}
+
+socket.on('connect', ()=>{
+  socket.emit('join_channel',{channel:currentChannel,username:'{{ user.username }}'});
+  radioLog(`Connected as {{ user.username }} on CH${currentChannel} • Welcome!`);
+});
+socket.on('new_sos', data=>{ addSOSCard(data,true); addSOSMarker(data); });
+socket.on('patrol_moved', addPatrollerMarker);
+socket.on('patroller_update', addPatrollerMarker);
+socket.on('ptt_started', d=>{ document.getElementById('talkerBadge').textContent=`🔴 ${d.username} talking...`; document.getElementById('talkDot').classList.add('live'); radioLog(`🔴 ${d.username} started talking`); });
+socket.on('ptt_ended', d=>{ document.getElementById('talkerBadge').textContent='Ready to talk'; document.getElementById('talkDot').classList.remove('live'); radioLog(`⚪ ${d.username} stopped`); });
+socket.on('channel_busy', d=>{ alert(`Channel busy — ${d.busy_by} is talking. Wait a sec!`); pttStop(); });
+socket.on('ptt_granted', ()=>{ document.getElementById('pttBtn').classList.add('granted'); });
+socket.on('audio_chunk', d=>{ const audio=new Audio(d.audio); audio.play().catch(()=>{}); });
+
+function radioLog(msg){
+  const el=document.getElementById('radioLog');
+  el.innerHTML+=`<div style="padding:4px 0;border-bottom:1px dashed #f0ebe4">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+  el.scrollTop=el.scrollHeight;
+}
+function changeChannel(){
+  const ch=document.getElementById('channelSel').value;
+  socket.emit('leave_channel',{channel:currentChannel,username:'{{ user.username }}'});
+  currentChannel=ch;
+  document.getElementById('channelBadge').textContent=`CH ${ch}`;
+  socket.emit('join_channel',{channel:ch,username:'{{ user.username }}'});
+  radioLog(`Switched to CH${ch}`);
+}
+
+async function loadSOS(){
+  try{
+    const res=await fetch('/api/sos-feed'); const feed=await res.json().catch(()=>[]);
+    const list=document.getElementById('sosList'); list.innerHTML='';
+    feed.reverse().forEach(d=>{ addSOSCard(d,false); addSOSMarker(d); });
+    if(feed.length===0) list.innerHTML='<div style="text-align:center;padding:20px;color:#9a9590">No SOS — community is safe today 🌿</div>';
+  }catch{}
+}
+function addSOSCard(data,isNew){
+  const list=document.getElementById('sosList');
+  if(isNew && list.innerHTML.includes('community is safe')) list.innerHTML='';
+  const div=document.createElement('div');
+  div.className='sos-card'+(isNew?' new':'');
+  div.innerHTML=`<div class="sos-icon">🚨</div><div class="sos-info"><b>${data.username||data.phoneId||'Neighbour'}</b><small>${data.message||'Needs help nearby'} • ${new Date(data.time||Date.now()).toLocaleTimeString()} • ${data.lat?.toFixed(3)||''}, ${data.lng?.toFixed(3)||''}</small><button class="btn-view" onclick="focusSOS('${data.lat}','${data.lng}')">View on map</button></div>`;
+  if(isNew) list.prepend(div); else list.appendChild(div);
+}
+function addSOSMarker(data){
+  if(!data.lat||!data.lng) return;
+  const key=data.username||data.phoneId||data.id;
+  if(sosMarkers[key]) map.removeLayer(sosMarkers[key]);
+  const m=L.marker([data.lat,data.lng],{icon:L.divIcon({html:'<div style="background:#fff;border:2px solid #ef4444;width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15)">🚨</div>',className:'',iconSize:[36,36],iconAnchor:[18,18]})}).addTo(map).bindPopup(`<b>${data.username||'Neighbour'}</b><br>${data.message||''}`);
+  sosMarkers[key]=m;
+}
+function focusSOS(lat,lng){ if(!lat||!lng) return; map.setView([lat,lng],16); }
+
+async function loadPatrollers(){
+  try{
+    const res=await fetch('/api/patrollers-live'); const data=await res.json().catch(()=>[]);
+    document.getElementById('liveCount').textContent=`${data.length} patrollers`;
+    document.getElementById('patrollerList').innerHTML='';
+    data.forEach(p=>{
+      addPatrollerMarker(p);
+      document.getElementById('patrollerList').innerHTML+=`<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f8f6f3;border-radius:12px;margin-bottom:8px"><div style="width:32px;height:32px;background:#dcfce7;border-radius:10px;display:flex;align-items:center;justify-content:center">👮</div><div><b style="font-size:13px">${p.username||p.email}</b><br><small style="color:#9a9590">${new Date(p.time||Date.now()).toLocaleTimeString()} • live</small></div></div>`;
+    });
+  }catch{}
+}
+function addPatrollerMarker(p){
+  if(!p.lat||!p.lng) return;
+  const key=p.username||p.email;
+  if(patrollerMarkers[key]) map.removeLayer(patrollerMarkers[key]);
+  const m=L.marker([p.lat,p.lng],{icon:L.divIcon({html:'<div style="background:#22c55e;border:2px solid #fff;width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15);color:#fff;font-weight:800">P</div>',className:'',iconSize:[36,36],iconAnchor:[18,18]})}).addTo(map).bindPopup(`${p.username||p.email}`);
+  patrollerMarkers[key]=m;
+}
+
+async function pttStart(){
+  if(isTalking) return;
+  isTalking=true;
+  const btn=document.getElementById('pttBtn');
+  btn.classList.add('talking'); btn.textContent='● Talking... release to listen';
+  socket.emit('ptt_start',{channel:currentChannel,username:'{{ user.username }}'});
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,sampleRate:16000}});
+    mediaRecorder=new MediaRecorder(stream,{mimeType:'audio/webm;codecs=opus'});
+    mediaRecorder.ondataavailable=e=>{
+      if(e.data.size>0){
+        const reader=new FileReader();
+        reader.onloadend=()=>{ socket.emit('ptt_audio',{channel:currentChannel,username:'{{ user.username }}',audio:reader.result}); };
+        reader.readAsDataURL(e.data);
+      }
+    };
+    mediaRecorder.start(200);
+  }catch(err){ alert('Mic permission needed: '+err.message); pttStop(); }
+}
+function pttStop(){
+  if(!isTalking) return;
+  isTalking=false;
+  const btn=document.getElementById('pttBtn');
+  btn.classList.remove('talking','granted'); btn.textContent='🎙️ Hold to Talk';
+  if(mediaRecorder&&mediaRecorder.state!=='inactive') mediaRecorder.stop();
+  if(mediaRecorder&&mediaRecorder.stream) mediaRecorder.stream.getTracks().forEach(t=>t.stop());
+  socket.emit('ptt_end',{channel:currentChannel,username:'{{ user.username }}'});
+}
+
+loadSOS(); loadPatrollers();
+setInterval(loadPatrollers,10000);
+if(navigator.geolocation){
+  navigator.geolocation.watchPosition(pos=>{
+    socket.emit('patrol_location',{username:'{{ user.username }}',lat:pos.coords.latitude,lng:pos.coords.longitude});
+  },()=>{}, {enableHighAccuracy:true});
+}
+</script>
+</body>
+</html>
