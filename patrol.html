@@ -5,7 +5,7 @@ body{margin:0;font-family:system-ui;background:#0f172a;min-height:100vh}
 .nav{padding:10px 14px;background:rgba(0,0,0,.2);color:#fff;display:flex;justify-content:space-between;align-items:center}
 .grid{padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .app{text-align:center;cursor:pointer}
-.app .ico{width:64px;height:64px;margin:0 auto;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fff;box-shadow:0 4px 10px rgba(0,0,0,.2)}
+.app.ico{width:64px;height:64px;margin:0 auto;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fff;box-shadow:0 4px 10px rgba(0,0,0,.2)}
 .app span{font-size:10px;font-weight:700;color:#fff;display:block;margin-top:5px}
 .win{position:absolute;inset:0;z-index:50;background:#fff;display:none;flex-direction:column}
 .win.open{display:flex}
@@ -13,7 +13,7 @@ body{margin:0;font-family:system-ui;background:#0f172a;min-height:100vh}
 #map{flex:1;min-height:420px}
 .live-dot{width:10px;height:10px;background:#22c55e;border-radius:50%;display:inline-block;animation:blink 1s infinite}
 @keyframes blink{0%,100%{opacity:1} 50%{opacity:0.3}}
-.trace-dot{width:12px;height:12px;background:#3b82f6;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.trace-dot{width:10px;height:10px;background:#3b82f6;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 </style></head><body>
 <script>
 let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null');
@@ -21,7 +21,6 @@ if(!auth || auth.role!=='patroller'){ if(!auth) location.href='/login'; }
 </script>
 <div class="phone">
 <div class="nav"><div><b>🛡️ ZONDI PATROL OS</b><br><span style="font-size:10px"><span class="live-dot"></span> LIVE TRACKING • <span id="clientCount">0 clients</span></span></div><button onclick="localStorage.clear();location.href='/login'" style="padding:6px 10px;border-radius:20px;border:0;font-size:11px">Logout</button></div>
-
 <div class="grid">
 <div class="app" onclick="openWin('tracker')"><div class="ico">🛰️</div><span>Tracker</span></div>
 <div class="app" onclick="openWin('sos')"><div class="ico" style="background:#fee2e2">🚨</div><span>SOS Feed</span></div>
@@ -30,80 +29,61 @@ if(!auth || auth.role!=='patroller'){ if(!auth) location.href='/login'; }
 <div class="app" onclick="openWin('list')"><div class="ico">👥</div><span>Clients List</span></div>
 <div class="app" onclick="openWin('settings')"><div class="ico">⚙️</div><span>Settings</span></div>
 </div>
-
-<div id="win-tracker" class="win"><div class="win-h"><b>🛰️ LIVE Tracker - Clients move auto</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div id="map"></div><div style="padding:8px;background:#f1f5f9;font-size:11px;display:flex;gap:8px"><span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:10px">🟢 Live</span><span id="lastUpdate">Updating every 3s...</span><button onclick="loadSOS()" style="margin-left:auto;padding:4px 8px;border-radius:8px;border:1px solid #ddd;background:#fff">Refresh</button></div></div>
-
-<div id="win-sos" class="win"><div class="win-h"><b>🚨 SOS Feed Live</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div id="sosList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
-<div id="win-clients" class="win"><div class="win-h"><b>📍 Client Pins Live</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div id="pinList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
+<div id="win-tracker" class="win"><div class="win-h"><b>🛰️ Tracker</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div id="map"></div><div style="padding:8px;background:#f1f5f9;font-size:11px;display:flex;gap:6px;align-items:center"><span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:10px">🟢 Live</span><span id="lastUpdate">Updating...</span><button onclick="clearTrails()" style="margin-left:auto;padding:5px 10px;border-radius:8px;border:1px solid #fecaca;background:#fee2e2;color:#b91c1c;font-weight:700">🧹 Clear</button><button onclick="loadSOS()" style="padding:5px 8px;border-radius:8px;border:1px solid #ddd;background:#fff">↻</button></div></div>
+<div id="win-sos" class="win"><div class="win-h"><b>🚨 SOS Feed</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div id="sosList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
+<div id="win-clients" class="win"><div class="win-h"><b>📍 Client Pins</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div id="pinList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
 <div id="win-list" class="win"><div class="win-h"><b>👥 All Clients</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div id="allList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
 <div id="win-settings" class="win"><div class="win-h"><b>⚙️ Settings</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div style="padding:16px;font-size:13px" id="setBox"></div></div>
 </div>
-
 <script>
 let map = L.map('map',{zoomControl:false}).setView([-25.60215,27.9799],14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,opacity:0.4}).addTo(map);
-
-let clientMarkers = {};
-let clientTrails = {};
-let clientDots = {};
-let clientHistories = {};
-let allClients = {};
-
-// FIXED: map inside tab, not covering apps
+let clientMarkers = {}; let clientTrails = {}; let clientDots = {}; let clientHistories = {}; let allClients = {};
 function openWin(n){document.querySelectorAll('.win').forEach(w=>w.classList.remove('open')); document.getElementById('win-'+n).classList.add('open'); setTimeout(()=>map.invalidateSize(),300);}
 function closeWin(){document.querySelectorAll('.win').forEach(w=>w.classList.remove('open'));}
+function clearTrails(){ Object.values(clientDots).forEach(arr=>arr.forEach(d=>{ try{map.removeLayer(d)}catch(e){} })); Object.values(clientTrails).forEach(t=>t.setLatLngs([])); Object.keys(clientDots).forEach(k=>clientDots[k]=[]); Object.keys(clientHistories).forEach(k=>clientHistories[k]=[]); }
 
 async function loadSOS(){
  try{
-  let res = await fetch('/api/sos-feed');
-  let feed = await res.json();
-  if(!feed.length) return;
-  let latest = {};
-  feed.forEach(f=>{ if(f.lat && f.lng) latest[f.phoneId]=f; });
+  let res = await fetch('/api/sos-feed'); let feed = await res.json(); if(!feed.length) return;
+  let latest = {}; feed.forEach(f=>{ if(f.lat && f.lng) latest[f.phoneId]=f; });
   document.getElementById('clientCount').innerText = Object.keys(latest).length + ' clients live';
-  document.getElementById('lastUpdate').innerText = 'Last: '+ new Date().toLocaleTimeString() + ' - auto 3s';
+  document.getElementById('lastUpdate').innerText = 'Last: '+ new Date().toLocaleTimeString();
 
   Object.values(latest).forEach(c=>{
-    allClients[c.phoneId]=c;
     let lat = parseFloat(c.lat), lng=parseFloat(c.lng);
-    let timeFull = c.time ? new Date(c.time).toLocaleString('en-ZA',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : new Date().toLocaleString();
+    let timeFull = c.time? new Date(c.time).toLocaleString('en-ZA',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : new Date().toLocaleString('en-ZA');
 
     if(!clientMarkers[c.phoneId]){
       let icon = L.divIcon({html:`<div style="background:#ef4444;color:#fff;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:800;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);white-space:nowrap">📍 ${c.name||c.phoneId.substring(0,6)}</div>`,className:'',iconSize:null});
       clientMarkers[c.phoneId]=L.marker([lat,lng],{icon:icon}).addTo(map);
-      clientMarkers[c.phoneId].bindPopup(`<b>${c.name||'Client'}</b><br>${c.address||''}<br><small>${c.phoneId}</small><br><a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank">Open in Maps</a>`);
-      clientTrails[c.phoneId]=L.polyline([[lat,lng]],{color:'#2563eb',weight:3,opacity:0.7}).addTo(map);
-      clientDots[c.phoneId]=[]; clientHistories[c.phoneId]=[{lat,lng,time:timeFull}];
+      clientTrails[c.phoneId]=L.polyline([[lat,lng]],{color:'#2563eb',weight:4,opacity:0.8}).addTo(map);
+      clientDots[c.phoneId]=[]; clientHistories[c.phoneId]=[{lat,lng}];
     }else{
       let last = clientHistories[c.phoneId][clientHistories[c.phoneId].length-1];
-      let moved = !last || Math.abs(last.lat-lat)>0.00004 || Math.abs(last.lng-lng)>0.00004;
+      // CLEAN: only add if moved 20m+ (0.0002 deg ~ 22m)
+      let moved =!last || Math.abs(last.lat-lat)>0.00018 || Math.abs(last.lng-lng)>0.00018;
       if(moved){
         clientMarkers[c.phoneId].setLatLng([lat,lng]);
-        let trail = clientTrails[c.phoneId].getLatLngs();
-        trail.push([lat,lng]);
-        // CHANGE THIS LINE IF YOU WANT LEAVE FOREVER: remove next line
-        if(trail.length>50) trail=trail.slice(-50);
+        let trail = clientTrails[c.phoneId].getLatLngs(); trail.push([lat,lng]);
+        if(trail.length>12) trail=trail.slice(-12); // CLEAN - only last 12 points
         clientTrails[c.phoneId].setLatLngs(trail);
-
-        // PROFESSIONAL ° DOT WITH TIME + DATE
-        let dotIcon = L.divIcon({html:`<div class="trace-dot"></div>`,className:'',iconSize:[12,12],iconAnchor:[6,6]});
+        // professional dot
+        let dotIcon = L.divIcon({html:`<div class="trace-dot"></div>`,className:'',iconSize:[10,10],iconAnchor:[5,5]});
         let dot = L.marker([lat,lng],{icon:dotIcon}).addTo(map);
-        dot.bindPopup(`<div style="font-size:12px;line-height:1.4"><b style="color:#2563eb">° Trace Point</b><br>📅 ${timeFull}<br>📍 ${c.address||lat.toFixed(5)+', '+lng.toFixed(5)}<br><small style="color:#64748b">${c.name||c.phoneId}</small></div>`);
+        dot.bindPopup(`<div style="font-size:11px"><b style="color:#2563eb">° ${timeFull}</b><br>${c.address||''}<br><small>${c.name||''}</small></div>`);
         clientDots[c.phoneId].push(dot);
-        clientHistories[c.phoneId].push({lat,lng,time:timeFull});
-        if(clientDots[c.phoneId].length>30){ let old=clientDots[c.phoneId].shift(); map.removeLayer(old); clientHistories[c.phoneId].shift(); }
+        clientHistories[c.phoneId].push({lat,lng});
+        if(clientDots[c.phoneId].length>12){ let old=clientDots[c.phoneId].shift(); map.removeLayer(old); clientHistories[c.phoneId].shift(); }
       }
     }
   });
-
-  document.getElementById('sosList').innerHTML = feed.slice(-30).reverse().map(f=>`<div style="padding:8px;border-bottom:1px solid #eee;font-size:12px"><b>${f.type||'SOS'}</b> - ${f.name||f.phoneId}<br><small>${f.address||''} • ${new Date(f.time).toLocaleString()}</small></div>`).join('');
-  document.getElementById('pinList').innerHTML = Object.values(latest).map(c=>`<div style="padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:8px;font-size:12px"><b>📍 ${c.name||c.phoneId}</b><br>${c.address||''}<br><small>${new Date(c.time).toLocaleString()}</small><br><button onclick="map.setView([${c.lat},${c.lng}],17);openWin('tracker')" style="margin-top:6px;padding:6px 10px;border-radius:8px;border:0;background:#111;color:#fff">📍 Track Live</button></div>`).join('');
+  document.getElementById('sosList').innerHTML = feed.slice(-20).reverse().map(f=>`<div style="padding:8px;border-bottom:1px solid #eee;font-size:12px"><b>${f.type||'SOS'}</b> - ${f.name||f.phoneId}<br><small>${new Date(f.time).toLocaleString()}</small></div>`).join('');
+  document.getElementById('pinList').innerHTML = Object.values(latest).map(c=>`<div style="padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:8px;font-size:12px"><b>📍 ${c.name||c.phoneId}</b><br><small>${new Date(c.time).toLocaleString()}</small><br><button onclick="map.setView([${c.lat},${c.lng}],17);openWin('tracker')" style="margin-top:6px;padding:6px 10px;border-radius:8px;border:0;background:#111;color:#fff">📍 Track</button></div>`).join('');
   document.getElementById('allList').innerHTML = document.getElementById('pinList').innerHTML;
-  document.getElementById('setBox').innerHTML = `Logged in as: <b>${auth.email}</b><br><br>Live tracking: <span style="color:#22c55e">● ON - 3s no refresh</span><br>Trace: <b>° dots + time/date - click dot to see</b><br>Clients: ${Object.keys(latest).length}`;
  }catch(e){console.log(e)}
 }
-async function pingPatroller(){ if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(p=>{ fetch('/api/patroller-ping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:auth.email,name:localStorage.getItem('zondi_shopname')||auth.email,lat:p.coords.latitude,lng:p.coords.longitude})}) }) } }
+async function pingPatroller(){ if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(p=>{ fetch('/api/patroller-ping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:auth.email,lat:p.coords.latitude,lng:p.coords.longitude})}) }) } }
 loadSOS(); setInterval(loadSOS, 3000); setInterval(pingPatroller, 10000); setTimeout(()=>map.invalidateSize(),500);
 </script>
 </body></html>
