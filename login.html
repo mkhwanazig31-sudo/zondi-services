@@ -415,6 +415,29 @@
       opacity: 0.85;
     }
 
+    /* Developer Portal */
+    .dev-access { margin-top: 15px; text-align: center; }
+    .dev-access button { border: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.025); color: #69736d; font-size: 11px; font-weight: 800; cursor: pointer; padding: 9px 13px; border-radius: 11px; transition: .2s ease; }
+    .dev-access button:hover { color: var(--green-light); background: rgba(34,197,94,.06); border-color: rgba(34,197,94,.12); transform: translateY(-1px); }
+    .dev-modal { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .dev-modal.show { display: flex; }
+    .dev-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .dev-card { width: 100%; max-width: 360px; position: relative; z-index: 2; padding: 26px; border-radius: 24px; border: 1px solid rgba(255,255,255,.09); background: linear-gradient(145deg, rgba(20,29,22,.98), rgba(8,13,9,.98)); box-shadow: 0 30px 80px rgba(0,0,0,.55); animation: devIn .2s ease; }
+    .dev-close { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border-radius: 9px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.035); color: #9ba59f; cursor: pointer; }
+    .dev-icon { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border-radius: 15px; margin-bottom: 15px; background: rgba(34,197,94,.1); font-size: 21px; }
+    .dev-card h2 { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+    .dev-card p { color: #7f8a83; font-size: 11px; line-height: 1.5; margin-bottom: 18px; }
+    .dev-error { display: none; padding: 10px 12px; margin-bottom: 10px; border-radius: 11px; background: rgba(127,29,29,.18); border: 1px solid rgba(239,68,68,.18); color: #ffaaaa; font-size: 11px; }
+    .dev-error.show { display: block; }
+    .dev-input { min-height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-radius: 13px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.04); margin-bottom: 10px; }
+    .dev-input span { opacity: .65; }
+    .dev-input input { width: 100%; border: 0; outline: 0; background: transparent; color: white; font-size: 13px; }
+    .dev-input input::placeholder { color: #5e6861; }
+    .dev-login-button { width: 100%; min-height: 52px; border: 0; border-radius: 13px; background: linear-gradient(135deg, #4ade80, #16a34a); color: #03200b; font-size: 12px; font-weight: 900; cursor: pointer; box-shadow: 0 12px 25px rgba(34,197,94,.15); transition: transform .18s ease, filter .18s ease; }
+    .dev-login-button:hover { transform: translateY(-1px); filter: brightness(1.04); }
+    .dev-login-button:disabled { opacity: .7; cursor: wait; transform: none; }
+    @keyframes devIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
     /* Footer */
     .footer {
       margin-top: 20px;
@@ -599,6 +622,12 @@
         <a href="/register">Create one</a>
       </div>
 
+      <div class="dev-access">
+        <button type="button" id="openDevBtn">
+          ⚙️ Developer Portal
+        </button>
+      </div>
+
       <div class="security-note">
         <span class="security-dot"></span>
         Secure Zondi community access
@@ -606,6 +635,22 @@
 
     </section>
   </main>
+
+  <div id="devModal" class="dev-modal" aria-hidden="true">
+    <div id="devOverlay" class="dev-overlay"></div>
+    <div class="dev-card" role="dialog" aria-modal="true" aria-labelledby="devTitle">
+      <button class="dev-close" type="button" id="closeDevBtn" aria-label="Close developer portal">✕</button>
+      <div class="dev-icon">⚙️</div>
+      <h2 id="devTitle">Developer Portal</h2>
+      <p>Authorized Zondi administration access.</p>
+      <div id="devError" class="dev-error" role="alert"></div>
+      <div class="dev-input">
+        <span aria-hidden="true">🔐</span>
+        <input id="devPassword" type="password" placeholder="Developer password" autocomplete="current-password">
+      </div>
+      <button id="devLoginButton" class="dev-login-button" type="button">Enter Developer Portal →</button>
+    </div>
+  </div>
 
   <script>
     const form = document.getElementById("loginForm");
@@ -761,6 +806,74 @@
       } finally {
         setLoading(false);
       }
+    });
+
+    const devModal = document.getElementById("devModal");
+    const openDevBtn = document.getElementById("openDevBtn");
+    const closeDevBtn = document.getElementById("closeDevBtn");
+    const devOverlay = document.getElementById("devOverlay");
+    const devPassword = document.getElementById("devPassword");
+    const devError = document.getElementById("devError");
+    const devLoginButton = document.getElementById("devLoginButton");
+
+    function openDevPortal() {
+      devError.classList.remove("show");
+      devError.textContent = "";
+      devPassword.value = "";
+      devModal.classList.add("show");
+      devModal.setAttribute("aria-hidden", "false");
+      setTimeout(() => devPassword.focus(), 100);
+    }
+
+    function closeDevPortal() {
+      devModal.classList.remove("show");
+      devModal.setAttribute("aria-hidden", "true");
+      devError.classList.remove("show");
+      devError.textContent = "";
+    }
+
+    async function developerLogin() {
+      const password = devPassword.value;
+      devError.classList.remove("show");
+      devError.textContent = "";
+      if (!password) {
+        devError.textContent = "Enter the developer password.";
+        devError.classList.add("show");
+        devPassword.focus();
+        return;
+      }
+      devLoginButton.disabled = true;
+      devLoginButton.textContent = "Checking access…";
+      try {
+        const response = await fetch("/api/dev-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password })
+        });
+        let data = {};
+        try { data = await response.json(); } catch { data = {}; }
+        if (!response.ok) throw new Error(data.error || "Developer access denied.");
+        window.location.href = data.redirect || "/dev";
+      } catch (error) {
+        console.error("Developer login error:", error);
+        devError.textContent = error.message || "Unable to access the developer portal.";
+        devError.classList.add("show");
+      } finally {
+        devLoginButton.disabled = false;
+        devLoginButton.textContent = "Enter Developer Portal →";
+      }
+    }
+
+    openDevBtn.addEventListener("click", openDevPortal);
+    closeDevBtn.addEventListener("click", closeDevPortal);
+    devOverlay.addEventListener("click", closeDevPortal);
+    devLoginButton.addEventListener("click", developerLogin);
+    devPassword.addEventListener("keydown", event => {
+      if (event.key === "Enter") developerLogin();
+      if (event.key === "Escape") closeDevPortal();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && devModal.classList.contains("show")) closeDevPortal();
     });
 
     // Small UX improvement: focus email when page opens.
