@@ -13,6 +13,9 @@ body{margin:0;font-family:system-ui;background:#0f172a;min-height:100vh}
 #map{flex:1;min-height:420px}
 .live-dot{width:10px;height:10px;background:#22c55e;border-radius:50%;display:inline-block;animation:blink 1s infinite}
 @keyframes blink{0%,100%{opacity:1} 50%{opacity:0.3}}
+/* NEW - professional trace dots */
+.trace-dot{width:12px;height:12px;background:#3b82f6;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.trace-popup{font-size:12px;line-height:1.4}
 </style></head><body>
 <script>
 let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null');
@@ -30,7 +33,6 @@ if(!auth || auth.role!=='patroller'){ if(!auth) location.href='/login'; }
 <div class="app" onclick="openWin('settings')"><div class="ico">⚙️</div><span>Settings</span></div>
 </div>
 
-<!-- TRACKER APP - MAP INSIDE MENU BOX -->
 <div id="win-tracker" class="win"><div class="win-h"><b>🛰️ LIVE Tracker - Clients move auto</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div id="map"></div><div style="padding:8px;background:#f1f5f9;font-size:11px;display:flex;gap:8px"><span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:10px">🟢 Live</span><span id="lastUpdate">Updating every 3s...</span><button onclick="loadSOS()" style="margin-left:auto;padding:4px 8px;border-radius:8px;border:1px solid #ddd;background:#fff">Refresh</button></div></div>
 
 <div id="win-sos" class="win"><div class="win-h"><b>🚨 SOS Feed Live</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div id="sosList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
@@ -41,76 +43,73 @@ if(!auth || auth.role!=='patroller'){ if(!auth) location.href='/login'; }
 
 <script>
 let map = L.map('map',{zoomControl:false}).setView([-25.60215,27.9799],14);
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22}).addTo(map);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{opacity:0.4}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,opacity:0.4}).addTo(map);
 
-let clientMarkers = {}; // phoneId -> marker
-let clientTrails = {}; // phoneId -> polyline
-let allClients = {}; // phoneId -> last data
+let clientMarkers = {};
+let clientTrails = {};
+let clientDots = {}; // phoneId -> array of dot markers
+let clientHistories = {}; // phoneId -> array of {lat,lng,time}
+let allClients = {};
 
 function openWin(n){document.querySelectorAll('.win').forEach(w=>w.classList.remove('open')); document.getElementById('win-'+n).classList.add('open'); setTimeout(()=>map.invalidateSize(),300);}
-function closeWin(){document.querySelectorAll('.win').forEach(w=>w.classList.remove('open')); document.getElementById('win-tracker').classList.add('open'); setTimeout(()=>map.invalidateSize(),300);}
+function closeWin(){document.querySelectorAll('.win').forEach(w=>w.classList.remove('open'));}
+// Keep your auto-open fix - grid shows first now
 
-// LIVE - NO REFRESH NEEDED - Poll every 3 seconds
 async function loadSOS(){
  try{
   let res = await fetch('/api/sos-feed');
   let feed = await res.json();
   if(!feed.length) return;
-
-  // Group by phoneId - last position
   let latest = {};
-  feed.forEach(f=>{
-    if(f.lat && f.lng) latest[f.phoneId]=f;
-  });
+  feed.forEach(f=>{ if(f.lat && f.lng) latest[f.phoneId]=f; });
 
-  // Update counts
   document.getElementById('clientCount').innerText = Object.keys(latest).length + ' clients live';
   document.getElementById('lastUpdate').innerText = 'Last: '+ new Date().toLocaleTimeString() + ' - auto 3s';
 
-  // For each client, update marker WITHOUT refresh
   Object.values(latest).forEach(c=>{
     allClients[c.phoneId]=c;
     let lat = parseFloat(c.lat), lng=parseFloat(c.lng);
+    let timeStr = c.time ? new Date(c.time).toLocaleString('en-ZA',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : new Date().toLocaleString();
+    
     if(!clientMarkers[c.phoneId]){
-      // New client - create marker
       let icon = L.divIcon({html:`<div style="background:#ef4444;color:#fff;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:800;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);white-space:nowrap">📍 ${c.name||c.phoneId.substring(0,6)}</div>`,className:'',iconSize:null});
       clientMarkers[c.phoneId]=L.marker([lat,lng],{icon:icon}).addTo(map);
       clientMarkers[c.phoneId].bindPopup(`<b>${c.name||'Client'}</b><br>${c.address||''}<br><small>${c.phoneId}</small><br><a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank">Open in Maps</a>`);
-      // Trail
-      clientTrails[c.phoneId]=L.polyline([[lat,lng]],{color:'#2563eb',weight:3,opacity:0.7}).addTo(map);
+      clientTrails[c.phoneId]=L.polyline([[lat,lng]],{color:'#2563eb',weight:3,opacity:0.7,lineCap:'round'}).addTo(map);
+      clientDots[c.phoneId]=[];
+      clientHistories[c.phoneId]=[];
     }else{
-      // Existing client - MOVE marker smoothly
-      clientMarkers[c.phoneId].setLatLng([lat,lng]);
-      // Extend trail
-      let trail = clientTrails[c.phoneId].getLatLngs();
-      trail.push([lat,lng]);
-      if(trail.length>50) trail=trail.slice(-50); // keep last 50 points
-      clientTrails[c.phoneId].setLatLngs(trail);
+      // Only add new dot if moved more than ~5 meters
+      let last = clientHistories[c.phoneId][clientHistories[c.phoneId].length-1];
+      let moved = !last || Math.abs(last.lat-lat)>0.00005 || Math.abs(last.lng-lng)>0.00005;
+      if(moved){
+        clientMarkers[c.phoneId].setLatLng([lat,lng]);
+        let trail = clientTrails[c.phoneId].getLatLngs(); trail.push([lat,lng]); if(trail.length>50) trail=trail.slice(-50); clientTrails[c.phoneId].setLatLngs(trail);
+        
+        // ADD PROFESSIONAL DOT WITH TIME/DATE
+        let dotIcon = L.divIcon({html:`<div class="trace-dot"></div>`,className:'',iconSize:[12,12],iconAnchor:[6,6]});
+        let dot = L.marker([lat,lng],{icon:dotIcon}).addTo(map);
+        dot.bindPopup(`<div class="trace-popup"><b>° Trace Point</b><br>📅 ${timeStr}<br>📍 ${c.address||lat.toFixed(5)+', '+lng.toFixed(5)}<br><small>${c.name||c.phoneId}</small></div>`);
+        clientDots[c.phoneId].push(dot);
+        clientHistories[c.phoneId].push({lat,lng,time:timeStr,rawTime:c.time});
+        
+        // Keep last 25 dots clean
+        if(clientDots[c.phoneId].length>25){
+          let old = clientDots[c.phoneId].shift(); map.removeLayer(old);
+          clientHistories[c.phoneId].shift();
+        }
+      }
     }
   });
 
-  // Update lists
-  document.getElementById('sosList').innerHTML = feed.slice(-30).reverse().map(f=>`<div style="padding:8px;border-bottom:1px solid #eee;font-size:12px"><b>${f.type||'SOS'}</b> - ${f.name||f.phoneId}<br><small>${f.address||''} • ${new Date(f.time).toLocaleTimeString()}</small></div>`).join('');
-  document.getElementById('pinList').innerHTML = Object.values(latest).map(c=>`<div style="padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:8px;font-size:12px"><b>📍 ${c.name||c.phoneId}</b><br>${c.address||''}<br><small>Lat:${c.lat} Lng:${c.lng}</small><br><button onclick="map.setView([${c.lat},${c.lng}],17);closeWin()" style="margin-top:6px;padding:6px 10px;border-radius:8px;border:0;background:#111;color:#fff">📍 Track Live</button></div>`).join('');
+  document.getElementById('sosList').innerHTML = feed.slice(-30).reverse().map(f=>`<div style="padding:8px;border-bottom:1px solid #eee;font-size:12px"><b>${f.type||'SOS'}</b> - ${f.name||f.phoneId}<br><small>${f.address||''} • ${new Date(f.time).toLocaleString()}</small></div>`).join('');
+  document.getElementById('pinList').innerHTML = Object.values(latest).map(c=>`<div style="padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:8px;font-size:12px"><b>📍 ${c.name||c.phoneId}</b><br>${c.address||''}<br><small>Lat:${c.lat} Lng:${c.lng}</small><br><button onclick="map.setView([${c.lat},${c.lng}],17);openWin('tracker')" style="margin-top:6px;padding:6px 10px;border-radius:8px;border:0;background:#111;color:#fff">📍 Track Live</button></div>`).join('');
   document.getElementById('allList').innerHTML = document.getElementById('pinList').innerHTML;
-  document.getElementById('setBox').innerHTML = `Logged in as: <b>${auth.email}</b><br><br>Live tracking: <span style="color:#22c55e">● ON - updates every 3s without refresh</span><br><br>Clients seen: ${Object.keys(latest).length}<br>Markers: ${Object.keys(clientMarkers).length}`;
+  document.getElementById('setBox').innerHTML = `Logged in as: <b>${auth.email}</b><br><br>Live tracking: <span style="color:#22c55e">● ON - updates every 3s without refresh</span><br>Trace: <b>° dots with time & date</b><br>Clients: ${Object.keys(latest).length}`;
  }catch(e){console.log(e)}
 }
-
-// Patroller also pings his own location
-async function pingPatroller(){
- if(navigator.geolocation){
-  navigator.geolocation.getCurrentPosition(p=>{
-    fetch('/api/patroller-ping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:auth.email,name:localStorage.getItem('zondi_shopname')||auth.email,lat:p.coords.latitude,lng:p.coords.longitude})});
-  });
- }
-}
-
-// Start live loops
-loadSOS();
-setInterval(loadSOS, 3000); // <-- THIS IS THE MAGIC - updates every 3s, no refresh needed
-setInterval(pingPatroller, 10000);
-setTimeout(()=>map.invalidateSize(),500);
+async function pingPatroller(){ if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(p=>{ fetch('/api/patroller-ping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:auth.email,name:localStorage.getItem('zondi_shopname')||auth.email,lat:p.coords.latitude,lng:p.coords.longitude})}) }) } }
+loadSOS(); setInterval(loadSOS, 3000); setInterval(pingPatroller, 10000); setTimeout(()=>map.invalidateSize(),500);
 </script>
 </body></html>
