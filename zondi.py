@@ -7,6 +7,7 @@ app = Flask(__name__, static_folder='.')
 SOS_FILE = 'sos_feed.json'
 USERS_FILE = 'users.json'
 PATROLLER_FILE = 'patrollers_live.json'
+VOICE_FILE = 'radio_talk.json'
 
 def load_json(f):
     if not os.path.exists(f): return []
@@ -103,6 +104,25 @@ def api_reg():
     save_json(USERS_FILE,users)
     return jsonify({"ok":True,"user":d})
 
+# === RADIO T720 VOICE - ADDED HERE ONLY ===
+@app.route('/api/radio/talk', methods=['POST'])
+def radio_talk_post():
+    d=request.json or {}
+    d['time']=datetime.now().isoformat()
+    feed=load_json(VOICE_FILE)
+    feed.append(d)
+    if len(feed)>50: feed=feed[-50:]
+    save_json(VOICE_FILE,feed)
+    return jsonify({"ok":True})
+
+@app.route('/api/radio/talk', methods=['GET'])
+def radio_talk_get():
+    channel=request.args.get('channel')
+    feed=load_json(VOICE_FILE)[-20:]
+    if channel:
+        feed=[x for x in feed if str(x.get('channel'))==str(channel)]
+    return jsonify(feed)
+
 @app.route('/<path:path>')
 def catch_all(path):
     if os.path.exists(path) and os.path.isfile(path):
@@ -111,6 +131,6 @@ def catch_all(path):
     return send_from_directory('.', 'login.html')
 
 if __name__=='__main__':
-    for f in [SOS_FILE,USERS_FILE,PATROLLER_FILE]:
+    for f in [SOS_FILE,USERS_FILE,PATROLLER_FILE,VOICE_FILE]:
         if not os.path.exists(f): save_json(f,[])
     app.run(host='0.0.0.0',port=10000)
