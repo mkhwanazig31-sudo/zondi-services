@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f8f6f3">
+<title>Zondi Dev Portal - Welcoming</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Plus Jakarta Sans',system-ui}
+body{background:#f8f6f3;color:#2d2a26;min-height:100vh;padding:0}
+.topbar{background:#ffffff;border-bottom:1px solid #eee8e0;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,#2d2a26,#57534e);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
+.page{max-width:720px;margin:0 auto;padding:20px}
+.hero{background:linear-gradient(135deg,#ffffff,#fefce8);border:1px solid #f0ebe4;border-radius:24px;padding:20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,.04)}
+.hero h2{font-size:20px;font-weight:800;letter-spacing:-.5px}
+.hero p{font-size:13px;color:#8b8680;margin-top:4px}
+.stats{display:flex;gap:8px;margin-top:12px}
+.stat{background:#ffffff;border:1px solid #f0ebe4;border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700}
+.card{background:#ffffff;border:1px solid #f0ebe4;border-radius:20px;padding:16px;margin-bottom:16px;box-shadow:0 2px 20px rgba(0,0,0,.03)}
+.card h3{font-size:15px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.empty{text-align:center;padding:30px 20px;color:#9a9590;background:#fcfaf8;border-radius:16px;border:1px dashed #e7ddd3}
+.user-card{display:flex;gap:12px;padding:14px;background:#fcfaf8;border:1px solid #f5f0eb;border-radius:16px;margin-bottom:10px;align-items:center;transition:.2s}
+.user-card:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.05);background:#fff}
+.avatar{width:44px;height:44px;background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#92400e;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-info b{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-info small{font-size:12px;color:#8b8680}
+.actions{display:flex;gap:8px;margin-top:10px}
+.btn{padding:10px 16px;border-radius:12px;border:0;font-weight:700;font-size:13px;cursor:pointer;transition:.15s}
+.btn:active{transform:scale(.97)}
+.btn-approve{background:#2d2a26;color:#fff}
+.btn-approve:hover{background:#000}
+.btn-reject{background:#ffffff;border:1px solid #e7ddd3;color:#57534e}
+.btn-reject:hover{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+.btn-revoke{background:#f8f6f3;border:1px solid #e7ddd3;color:#8b8680;font-size:12px;padding:8px 12px}
+.badge{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-approved{background:#dcfce7;color:#166534}
+.badge-rejected{background:#fee2e2;color:#991b1b}
+.list-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f8f6f3;border-radius:12px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🛡️</div>
+    <div><div style="font-weight:800;font-size:14px">ZONDI</div><div style="font-size:11px;color:#9a9590">Dev Portal</div></div>
+  </div>
+  <div style="font-size:12px;color:#8b8680">{{ user.username }} • <a href="/patrol" style="color:#2d2a26;font-weight:700;text-decoration:none">Patrol →</a></div>
+</div>
+
+<div class="page">
+  <div class="hero">
+    <div>
+      <h2>Welcome back, {{ user.username }} 👋</h2>
+      <p>Manage your community patrollers. Keep Ga-Rankuwa safe together.</p>
+      <div class="stats">
+        <div class="stat">⏳ {{ pending|length }} pending</div>
+        <div class="stat">👮 {{ all_patrollers|length }} total patrollers</div>
+        <div class="stat">🌿 Live</div>
+      </div>
+    </div>
+    <div style="font-size:36px">🏘️</div>
+  </div>
+
+  <div class="card">
+    <h3>⏳ Awaiting your approval</h3>
+    {% if pending|length==0 %}
+      <div class="empty">
+        <div style="font-size:32px;margin-bottom:8px">✨</div>
+        <b>All caught up!</b><br>
+        <small>No new patrollers waiting. Community is secure.</small>
+      </div>
+    {% endif %}
+    {% for u in pending %}
+    <div class="user-card">
+      <div class="avatar">{{ u['username'][0]|upper }}</div>
+      <div class="user-info">
+        <b>{{ u['username'] }}</b>
+        <small>📞 {{ u['phone'] or 'No phone' }} • Joined {{ (u['created_at']|int)|default('recently') }}</small>
+        <div style="margin-top:6px"><span class="badge badge-pending">{{ u['status'] }}</span></div>
+        <div class="actions">
+          <button class="btn btn-approve" onclick="act('{{ u['username'] }}','approve')">✅ Approve & Welcome</button>
+          <button class="btn btn-reject" onclick="act('{{ u['username'] }}','reject')">Reject</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h3>👮 Your patroller family</h3>
+    <p style="font-size:12px;color:#8b8680;margin-bottom:12px">Everyone who keeps the community safe</p>
+    {% for u in all_patrollers %}
+    <div class="list-item">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;background:#fff;border:1px solid #f0ebe4;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">{{ u['username'][0]|upper }}</div>
+        <div><b style="font-size:13px">{{ u['username'] }}</b><br><small style="color:#8b8680">{{ u['phone'] }}</small></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="badge {% if u['status']=='approved' %}badge-approved{% elif u['status']=='pending' %}badge-pending{% else %}badge-rejected{% endif %}">{{ u['status'] }}</span>
+        {% if u['status']=='approved' %}
+          <button class="btn btn-revoke" onclick="act('{{ u['username'] }}','revoke')">Revoke</button>
+        {% else %}
+          <button class="btn btn-approve" style="padding:8px 12px;font-size:12px" onclick="act('{{ u['username'] }}','approve')">Approve</button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="text-align:center;padding:20px;color:#c4bdb5;font-size:11px">
+    Zondi • Community Safety • Made with 💛 for Ga-Rankuwa, Mabopane & Soshanguve<br>
+    v3.1 Welcoming Edition • T2770 Radio • PWA Ready
+  </div>
+</div>
+
+<script>
+async function act(username, action){
+  const btn=event.target;
+  const original=btn.textContent;
+  btn.textContent='...'; btn.disabled=true;
+  const res=await fetch('/api/admin/approve',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username, action, admin_key:'zondi_admin_123'})
+  });
+  const data=await res.json();
+  if(data.ok){ 
+    btn.textContent='Done ✓';
+    setTimeout(()=>location.reload(),600);
+  } else {
+    alert('Error: '+(data.error||'unknown'));
+    btn.textContent=original; btn.disabled=false;
+  }
+}
+</script>
+</body>
+</html>
