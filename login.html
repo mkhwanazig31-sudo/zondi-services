@@ -1,27 +1,28 @@
 <!DOCTYPE html><html><head><title>Zondi Login</title><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{margin:0;font-family:system-ui;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh}.card{width:92%;max-width:380px;background:#fff;padding:22px;border-radius:20px;border:1px solid #e5e7eb}input{width:100%;padding:14px;border-radius:12px;border:1px solid #ddd;margin-top:10px;box-sizing:border-box;font-size:15px}button{width:100%;padding:14px;border-radius:12px;border:0;background:#111;color:#fff;margin-top:12px;font-weight:800;font-size:15px}.role{display:flex;gap:8px;margin-top:12px}.role button{flex:1;background:#f1f5f9;color:#111;border:1px solid #ddd}.role button.active{background:#111;color:#fff}</style></head><body>
+<style>body{margin:0;font-family:system-ui;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px} .card{width:100%;max-width:380px;background:#fff;padding:22px;border-radius:24px} input{width:100%;padding:14px;border-radius:12px;border:1px solid #ddd;margin-top:10px;box-sizing:border-box} button{width:100%;padding:14px;border-radius:12px;border:0;background:#111;color:#fff;margin-top:12px;font-weight:800} #msg{font-size:12px;color:#e11d48;margin-top:8px;text-align:center}</style></head><body>
 <div class="card">
-<h3 style="margin:0">🛡️ Zondi Login</h3><p style="font-size:12px;color:#666">Choose role - no password needed on live</p>
-<input id="email" placeholder="Email - e.g. mkhwanazig3@gmail.com">
-<input id="pass" placeholder="Name - e.g. Patrol 1" >
-<div class="role"><button id="btnClient" class="active" onclick="setRole('client')">📱 Client</button><button id="btnPatroller" onclick="setRole('patroller')">🚓 Patroller</button></div>
+<h2 style="margin:0">🛡️ Zondi Login</h2><p style="font-size:12px;color:#666">Enter your registered email & password</p>
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
 <button onclick="login()">Login</button>
-<div style="font-size:11px;color:#888;margin-top:10px;text-align:center">If login fails, we create you offline - works 100%</div>
+<div id="msg"></div>
+<p style="font-size:12px;text-align:center;margin-top:14px">No account? <a href="/register" style="font-weight:800">Register here</a></p>
 </div>
 <script>
-let role='client';
-function setRole(r){role=r; document.getElementById('btnClient').classList.toggle('active',r=='client'); document.getElementById('btnPatroller').classList.toggle('active',r=='patroller');}
-function login(){
- let email=document.getElementById('email').value||'guest@zondi.com';
- let name=document.getElementById('pass').value||'User';
- // Always succeed - store locally
- let user={email:email,name:name,role:role};
- localStorage.setItem('zondi_auth',JSON.stringify(user));
- localStorage.setItem('zondi_address','555 unit4');
- localStorage.setItem('zondi_shopname',name);
- // try server but don't depend on it
- fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:'123',role:role,name:name})}).catch(()=>{});
- if(role=='patroller') location.href='/patrollers'; else location.href='/clients';
+async function login(){
+ let email=document.getElementById('email').value.trim();
+ let password=document.getElementById('password').value;
+ let msg=document.getElementById('msg');
+ if(!email||!password){msg.innerText='Enter email and password'; return;}
+ try{
+  let res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+  let j=await res.json();
+  if(!res.ok){msg.innerText=j.error||'Wrong email or password'; return;}
+  localStorage.setItem('zondi_auth',JSON.stringify({email:j.email||email,name:j.name||email,role:j.role||'client'}));
+  localStorage.setItem('zondi_address',j.address||'Ga-Rankuwa');
+  localStorage.setItem('zondi_shopname',j.name||email);
+  if((j.role||'client')=='patroller') location.href='/patrollers'; else location.href='/clients';
+ }catch(e){msg.innerText='Server offline - try again';}
 }
 </script>
 </body></html>
