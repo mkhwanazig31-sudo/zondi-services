@@ -1,96 +1,116 @@
-<!DOCTYPE html><html><head><title>Patrol OS LIVE</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-body{margin:0;font-family:system-ui;background:#0f172a;min-height:100vh}
-.phone{max-width:420px;margin:0 auto;min-height:100vh;background:#38bdf8;position:relative;display:flex;flex-direction:column}
-.nav{padding:10px 14px;background:rgba(0,0,0,.3);color:#fff;display:flex;justify-content:space-between;align-items:center}
-.grid{padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;position:relative;z-index:1}
-.app{text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
-.app.ico{width:64px;height:64px;margin:0 auto;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.25)}
-.app span{font-size:10px;font-weight:800;color:#fff;display:block;margin-top:6px;letter-spacing:.3px}
-.win{position:absolute;inset:0;z-index:50;background:#fff;display:none;flex-direction:column}
-.win.open{display:flex;z-index:100}
-.win-h{padding:12px;background:#0f172a;color:#fff;display:flex;justify-content:space-between;align-items:center}
-#map{flex:1;min-height:420px;position:relative;background:#000}
-.live-dot{width:10px;height:10px;background:#22c55e;border-radius:50%;display:inline-block;animation:blink 1s infinite}
-@keyframes blink{0%,100%{opacity:1} 50%{opacity:.3}}
-.trace-dot{width:12px;height:12px;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)}
-.map-tools{position:absolute;top:12px;right:12px;z-index:500;display:flex;flex-direction:column;gap:8px}
-.map-tools button{width:38px;height:38px;border:0;border-radius:10px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:18px;cursor:pointer;font-weight:700}
-.search-bar{display:flex;gap:6px;padding:10px;background:#f8fafc;border-bottom:1px solid #e2e8f0}
-.search-bar input{flex:1;padding:10px 14px;border-radius:24px;border:1px solid #cbd5e1;font-size:13px;outline:none}
-.legend{position:absolute;bottom:14px;left:14px;z-index:400;background:rgba(255,255,255,.96);padding:10px 12px;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,.2);font-size:11px;max-width:180px;max-height:170px;overflow-y:auto}
-.legend b{display:block;margin-bottom:6px;font-size:12px}
-.legend-item{display:flex;align-items:center;gap:8px;margin:5px 0;cursor:pointer;padding:2px 4px;border-radius:6px}
-.log-item{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:11px;display:flex;gap:10px;align-items:center;cursor:pointer}
-.log-dot{width:10px;height:10px;background:#3b82f6;border-radius:50%;flex-shrink:0}
-.client-pin{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px;border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.2),0 4px 12px rgba(0,0,0,.3);position:relative}
-.client-pin::after{content:'';position:absolute;inset:-8px;border-radius:50%;border:2px solid currentColor;animation:pulse 1.5s infinite;opacity:.5}
-@keyframes pulse{0%{transform:scale(.8);opacity:.7}100%{transform:scale(1.5);opacity:0}}
-.client-tab{padding:8px 12px;border-radius:20px;border:1px solid #e2e8f0;background:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
-.client-tab.active{background:#0f172a;color:#fff}
-.log-card{padding:10px 12px;border:1px solid #f1f5f9;border-radius:12px;margin-bottom:6px;background:#fff;font-size:11px}
-.t720{flex:1;background:linear-gradient(180deg,#111827 0%,#1f2937 100%);display:flex;flex-direction:column;color:#fff}
-.t720-screen{background:#000;margin:12px;border-radius:16px;padding:12px;border:2px solid #374151}
-.t720-ch{font-size:26px;font-weight:900;text-align:center}
-.t720-status{display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;margin-top:6px}
-.t720-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
-.ptt-big{width:160px;height:160px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#ef4444,#7f1d1d);border:6px solid #fff;box-shadow:0 0 0 8px rgba(239,68,68,.2),0 8px 24px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;cursor:pointer;user-select:none;transition:.1s}
-.ptt-big.talking{transform:scale(.95);background:radial-gradient(circle at 30% 30%,#22c55e,#14532d);box-shadow:0 0 0 12px rgba(34,197,94,.3),0 0 40px rgba(34,197,94,.6)}
-.t720-vol{display:flex;gap:12px;margin:16px}
-.t720-vol button{width:44px;height:44px;border-radius:12px;border:0;background:#374151;color:#fff;font-size:20px;font-weight:800}
-.t720-sos{margin-top:10px;background:#ef4444;color:#fff;border:0;padding:10px 20px;border-radius:24px;font-weight:800;font-size:12px}
-.wave{display:flex;gap:3px;align-items:center;height:20px;margin-top:8px}
-.wave span{width:3px;background:#22c55e;border-radius:2px;animation:wave 0.6s infinite alternate}
-@keyframes wave{0%{height:4px}100%{height:20px}}
-</style></head><body>
-<script>let auth=JSON.parse(localStorage.getItem('zondi_auth')||'null'); if(!auth||auth.role!=='patroller'){ if(!auth) location.href='/login'; }</script>
-<div class="phone">
-<div class="nav"><div><b>🛡️ ZONDI PATROL OS</b><br><span style="font-size:10px"><span class="live-dot"></span> LIVE • <span id="clientCount">0 clients</span> • <span id="mapType" style="background:#fff;color:#000;padding:1px 6px;border-radius:8px;font-weight:800">SATELLITE</span></span></div><button onclick="localStorage.clear();location.href='/login'" style="padding:6px 12px;border-radius:20px;border:0;font-size:11px;font-weight:700">Logout</button></div>
-<div class="grid">
-<div class="app" onclick="openWin('tracker')"><div class="ico">🛰️</div><span>Tracker</span></div>
-<div class="app" onclick="openWin('sos')"><div class="ico" style="background:#fee2e2">🚨</div><span>SOS Feed</span></div>
-<div class="app" onclick="openWin('radio')"><div class="ico" style="background:#e9d5ff">📻</div><span>Patrol Radio</span></div>
-<div class="app" onclick="openWin('logs')"><div class="ico" style="background:#fef3c7">📜</div><span>Map Logs</span></div>
-<div class="app" onclick="openWin('clientLogs')"><div class="ico" style="background:#e0f2fe">🗂️</div><span>Client's Log</span></div>
-<div class="app" onclick="openWin('clients')"><div class="ico" style="background:#dcfce7">📍</div><span>Client Pins</span></div>
-</div>
-<div id="win-tracker" class="win"><div class="win-h"><b>🛰️ Tracker</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕ Back</button></div><div class="search-bar"><input id="clientSearch" placeholder="🔍 Search..." oninput="filterClients(this.value)"><button onclick="locateMe()" style="padding:8px 14px;border-radius:24px;border:0;background:#0f172a;color:#fff;font-size:12px;font-weight:700">📍 Me</button></div><div id="map"><div class="map-tools"><button onclick="map.zoomIn()">+</button><button onclick="map.zoomOut()">−</button><button onclick="toggleMap()">🗺️</button><button onclick="map.setView([-25.60215,27.9799],14)">⌖</button></div><div id="legend" class="legend"><b>🟢 Active</b><div id="legendList" style="color:#64748b">No clients</div></div></div><div style="padding:10px;background:#f1f5f9;font-size:11px;display:flex;gap:8px"><span id="lastUpdate">Updating...</span><button onclick="clearTrails()" style="margin-left:auto;padding:6px 12px;border-radius:8px;border:1px solid #fecaca;background:#fee2e2;color:#b91c1c;font-weight:800">🧹 Clear</button></div></div>
-<div id="win-sos" class="win"><div class="win-h"><b>🚨 SOS Feed</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div id="sosList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
-<div id="win-logs" class="win"><div class="win-h"><b>📜 Map Logs</b><div style="display:flex;gap:6px"><button onclick="document.getElementById('logsList').innerHTML='';mapLogs=[]" style="border:0;border-radius:8px;padding:6px 10px;background:#fee2e2;color:#b91c1c;font-size:11px">Clear</button><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div></div><div id="logsList" style="padding:0;overflow-y:auto;flex:1;background:#f8fafc"></div></div>
-<div id="win-clientLogs" class="win"><div class="win-h"><b>🗂️ Client's Log</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div style="padding:10px;display:flex;gap:6px;overflow-x:auto;border-bottom:1px solid #f1f5f9" id="clientTabs"></div><div id="clientLogsList" style="padding:10px;overflow-y:auto;flex:1;background:#f8fafc"></div></div>
-<div id="win-clients" class="win"><div class="win-h"><b>📍 Pins</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div id="pinList" style="padding:10px;overflow-y:auto;flex:1"></div></div>
-<div id="win-radio" class="win"><div class="win-h"><b>📻 ETERA T720 - Radio</b><button onclick="closeWin()" style="border:0;border-radius:8px;padding:6px 10px">✕</button></div><div class="t720"><div class="t720-screen"><div class="t720-ch" id="radioCh">CH 01 - PATROL</div><div class="t720-status"><span>📶 4G LTE • 🔋 92%</span><span id="radioStatus">IDLE</span></div><div id="radioWave" style="display:none;justify-content:center" class="wave"><span></span><span></span><span></span><span></span><span></span></div><div style="font-size:10px;color:#6b7280;text-align:center;margin-top:6px" id="radioTalking">No TX • Hold PTT</div></div><div class="t720-mid"><div id="pttBtn" class="ptt-big" onmousedown="startPTT()" ontouchstart="startPTT();return false" onmouseup="stopPTT()" ontouchend="stopPTT();return false">HOLD<br>PTT</div><div class="t720-vol"><button onclick="changeCh(-1)">−</button><span style="font-size:12px;color:#9ca3af;align-self:center" id="volLabel">VOL 08 • CH 01/08</span><button onclick="changeCh(1)">+</button></div><button class="t720-sos" onclick="sendSOSRadio()">🚨 SOS</button><div style="margin-top:14px;width:100%;background:#111827;border-radius:12px;padding:8px;max-height:110px;overflow-y:auto;font-size:11px" id="radioLog"><div style="color:#6b7280">Radio log...</div></div></div></div></div>
-</div>
-<script>
-let map = L.map('map',{zoomControl:false}).setView([-25.60215,27.9799],14);
-let satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(map);
-let streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
-let labelLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(map);
-let isSat=true;
-function toggleMap(){ if(isSat){ map.removeLayer(satLayer); map.removeLayer(labelLayer); streetLayer.addTo(map); document.getElementById('mapType').innerText='STREETS'; }else{ map.removeLayer(streetLayer); satLayer.addTo(map); labelLayer.addTo(map); document.getElementById('mapType').innerText='SATELLITE'; } isSat=!isSat; setTimeout(()=>map.invalidateSize(),100); }
-const COLORS=['#ef4444','#22c55e','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316'];
-function getColor(id){ let h=0; for(let i=0;i<id.length;i++) h=id.charCodeAt(i)+((h<<5)-h); return COLORS[Math.abs(h)%COLORS.length]; }
-function getInitials(name,id){ if(name){ let p=name.trim().split(' '); if(p.length>=2) return (p[0][0]+p[1][0]).toUpperCase(); return name.substring(0,2).toUpperCase(); } return id.substring(0,2).toUpperCase(); }
-let clientMarkers={},clientTrails={},clientDots={},clientHistories={},allClients={},myPos=null,mapLogs=[],clientLogs={},selectedClientTab=null;
-function openWin(n){ console.log('open',n); document.querySelectorAll('.win').forEach(w=>w.classList.remove('open')); let el=document.getElementById('win-'+n); if(el){ el.classList.add('open'); } setTimeout(()=>{ try{map.invalidateSize()}catch(e){} },350); }
-function closeWin(){ document.querySelectorAll('.win').forEach(w=>w.classList.remove('open')); }
-function clearTrails(){ Object.values(clientDots).forEach(a=>a.forEach(d=>{try{map.removeLayer(d)}catch(e){}})); Object.values(clientTrails).forEach(t=>t.setLatLngs([])); Object.keys(clientDots).forEach(k=>clientDots[k]=[]); Object.keys(clientHistories).forEach(k=>clientHistories[k]=[]); }
-function locateMe(){ if(myPos) map.setView(myPos,18); else alert('Getting location...'); }
-function goToClient(lat,lng){ map.setView([lat,lng],19); openWin('tracker'); }
-function getDirections(lat,lng){ if(myPos) window.open(`https://www.google.com/maps/dir/${myPos[0]},${myPos[1]}/${lat},${lng}/`,'_blank'); else window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,'_blank'); }
-function filterClients(q){ q=q.toLowerCase(); let f=Object.values(allClients).filter(c=>(c.name||'').toLowerCase().includes(q)||(c.phoneId||'').toLowerCase().includes(q)); document.getElementById('pinList').innerHTML=buildClientList(q?f:Object.values(allClients)); }
-function buildClientList(list){ return list.map(c=>`<div style="padding:12px;border:1px solid #e2e8f0;border-radius:14px;margin-bottom:8px;background:#fff"><div style="display:flex;justify-content:space-between"><b>📍 ${c.name||c.phoneId.substring(0,8)}</b><span style="color:#22c55e;font-size:10px">● LIVE</span></div><div style="color:#64748b;font-size:11px;margin:3px 0">${c.address||''}<br>🕒 ${new Date(c.time).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'})}</div><div style="display:flex;gap:6px;margin-top:8px"><button onclick="goToClient(${c.lat},${c.lng})" style="flex:1;padding:8px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:700">👁️ View</button><button onclick="getDirections(${c.lat},${c.lng})" style="flex:1;padding:8px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:700">🧭 Directions</button></div></div>`).join('')||'<div style="padding:20px;text-align:center;color:#94a3b8">No match</div>'; }
-function addMapLog(c,timeFull){ mapLogs.unshift({name:c.name||c.phoneId,time:timeFull,addr:c.address||'',lat:c.lat,lng:c.lng}); if(mapLogs.length>100) mapLogs.pop(); document.getElementById('logsList').innerHTML=mapLogs.map(l=>`<div class="log-item" onclick="goToClient(${l.lat},${l.lng})"><span class="log-dot"></span><div style="flex:1"><b>${l.name}</b> moved<br><small style="color:#64748b">${l.time}</small><br><small>${l.addr}</small></div><span>📍</span></div>`).join(''); }
-function addClientLog(c){ let id=c.phoneId; let now=new Date(c.time||Date.now()); if(!clientLogs[id]) clientLogs[id]=[]; let logs=clientLogs[id]; let last=logs[0]; if(last && Math.abs(last.lat-c.lat)<0.0003 && Math.abs(last.lng-c.lng)<0.0003){ let diffMin=Math.round((now - new Date(last.arrivedAt))/60000); last.stayed = diffMin<=0? '<1m' : diffMin+'m'; }else{ if(last){ let diffMin=Math.round((now - new Date(last.arrivedAt))/60000); last.stayed = diffMin<=0? '<1m' : diffMin+'m'; } logs.unshift({addr:c.address||'Unknown',lat:c.lat,lng:c.lng,date:now.toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'}),time:now.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}),arrivedAt:now.toISOString(),stayed:'now'}); if(logs.length>80) logs.pop(); } renderClientTabs(); if(selectedClientTab===id ||!selectedClientTab){ selectedClientTab=id; renderClientLogs(id); } }
-function renderClientTabs(){ let ids=Object.keys(clientLogs); document.getElementById('clientTabs').innerHTML=ids.map(id=>{ let name=(allClients[id]?.name||id.substring(0,6)); let col=getColor(id); return `<div class="client-tab ${selectedClientTab===id?'active':''}" onclick="selectedClientTab='${id}';renderClientTabs();renderClientLogs('${id}')" style="border-color:${col};${selectedClientTab===id?`background:${col};border-color:${col};color:#fff`:''}">${getInitials(name,id)} ${name}</div>`; }).join('')||'<span style="font-size:11px;color:#94a3b8">No logs yet</span>'; }
-function renderClientLogs(id){ let logs=clientLogs[id]||[]; document.getElementById('clientLogsList').innerHTML=logs.map(l=>`<div class="log-card" onclick="goToClient(${l.lat},${l.lng})"><div style="display:flex;justify-content:space-between"><b>📍 ${l.addr.substring(0,38)}</b><span style="background:#f1f5f9;padding:2px 8px;border-radius:12px;font-size:10px">⏱️ ${l.stayed}</span></div><div style="color:#64748b;margin-top:4px">📅 ${l.date} • 🕒 ${l.time}</div></div>`).join('')||'<div style="padding:30px;text-align:center;color:#94a3b8">No history</div>'; }
-async function loadSOS(){ try{ let res=await fetch('/api/sos-feed'); let feed=await res.json(); if(!feed.length) return; let latest={}; feed.forEach(f=>{if(f.lat&&f.lng) latest[f.phoneId]=f;}); allClients=latest; document.getElementById('clientCount').innerText=Object.keys(latest).length+' clients'; document.getElementById('lastUpdate').innerText='Last: '+new Date().toLocaleTimeString(); document.getElementById('legendList').innerHTML=Object.values(latest).map(c=>{let col=getColor(c.phoneId);return `<div class="legend-item" onclick="goToClient(${c.lat},${c.lng})"><div style="width:18px;height:18px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">${getInitials(c.name,c.phoneId)}</div> ${c.name||c.phoneId.substring(0,6)}</div>`}).join('')||'No clients'; Object.values(latest).forEach(c=>{ let lat=parseFloat(c.lat),lng=parseFloat(c.lng); let timeFull=c.time?new Date(c.time).toLocaleString('en-ZA',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'}):new Date().toLocaleString('en-ZA'); let col=getColor(c.phoneId); let init=getInitials(c.name,c.phoneId); if(!clientMarkers[c.phoneId]){ let icon=L.divIcon({html:`<div class="client-pin" style="background:${col};color:${col}"><span style="color:#fff;z-index:1">${init}</span></div>`,className:'',iconSize:[36,36],iconAnchor:[18,18]}); clientMarkers[c.phoneId]=L.marker([lat,lng],{icon:icon}).addTo(map); clientMarkers[c.phoneId].bindPopup(`<b>${c.name||'Client'}</b><br>${c.address||''}<br><small>🕒 ${timeFull}</small>`); clientTrails[c.phoneId]=L.polyline([[lat,lng]],{color:col,weight:4,opacity:0.9}).addTo(map); clientDots[c.phoneId]=[]; clientHistories[c.phoneId]=[{lat,lng}]; addClientLog(c); addMapLog(c,timeFull); }else{ let last=clientHistories[c.phoneId][clientHistories[c.phoneId].length-1]; let moved=!last||Math.abs(last.lat-lat)>0.00015||Math.abs(last.lng-lng)>0.00015; if(moved){ clientMarkers[c.phoneId].setLatLng([lat,lng]); let trail=clientTrails[c.phoneId].getLatLngs(); trail.push([lat,lng]); if(trail.length>5) trail=trail.slice(-5); clientTrails[c.phoneId].setLatLngs(trail); let dotIcon=L.divIcon({html:`<div class="trace-dot" style="background:${col}"></div>`,className:'',iconSize:[12,12],iconAnchor:[6,6]}); let dot=L.marker([lat,lng],{icon:dotIcon}).addTo(map); clientDots[c.phoneId].push(dot); if(clientDots[c.phoneId].length>5){ let old=clientDots[c.phoneId].shift(); map.removeLayer(old); } clientHistories[c.phoneId].push({lat,lng}); if(clientHistories[c.phoneId].length>5) clientHistories[c.phoneId].shift(); addClientLog(c); addMapLog(c,timeFull); } } }); let emergencies=feed.filter(f=> f.type &&!f.type.toUpperCase().includes('LOCATION_UPDATE')); if(emergencies.length===0){ document.getElementById('sosList').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8"><div style="font-size:40px">✅</div><b>No Emergencies</b></div>'; }else{ document.getElementById('sosList').innerHTML=emergencies.slice(-20).reverse().map(f=>`<div style="padding:10px;border-left:4px solid #ef4444;border-bottom:1px solid #eee;background:#fff8f8"><b style="color:#ef4444">🚨 ${f.type}</b> - ${f.name||f.phoneId}<br><small>${new Date(f.time).toLocaleString('en-ZA')}</small></div>`).join(''); } document.getElementById('pinList').innerHTML=buildClientList(Object.values(latest)); }catch(e){console.log(e)} }
-let ch=1,isTalking=false;
-function changeCh(d){ ch=Math.max(1,Math.min(8,ch+d)); document.getElementById('radioCh').innerText=`CH 0${ch} - ${['PATROL','RESPONSE','BACKUP','CONTROL','ZONE-A','ZONE-B','ALL-CALL','EMRG'][ch-1]}`; document.getElementById('volLabel').innerText=`VOL 08 • CH 0${ch}/08`; }
-function startPTT(){ isTalking=true; document.getElementById('pttBtn').classList.add('talking'); document.getElementById('radioStatus').innerText='TX • TALKING'; document.getElementById('radioStatus').style.color='#22c55e'; document.getElementById('radioWave').style.display='flex'; }
-function stopPTT(){ isTalking=false; document.getElementById('pttBtn').classList.remove('talking'); document.getElementById('radioStatus').innerText='IDLE'; document.getElementById('radioStatus').style.color='#9ca3af'; document.getElementById('radioWave').style.display='none'; }
-function sendSOSRadio(){ alert('SOS sent on CH 0'+ch); }
-function pingPatroller(){ if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(p=>{ myPos=[p.coords.latitude,p.coords.longitude]; fetch('/api/patroller-ping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:auth.email,lat:p.coords.latitude,lng:p.coords.longitude})}) }) } }
-loadSOS(); setInterval(loadSOS,3000); setInterval(pingPatroller,10000); setTimeout(()=>map.invalidateSize(),500);
-</script>
-</body></html>
+from flask import Flask, request, jsonify, send_from_directory
+import json, os
+from datetime import datetime, timedelta
+
+app = Flask(__name__, static_folder='.')
+
+SOS_FILE = 'sos_feed.json'
+USERS_FILE = 'users.json'
+PATROLLER_FILE = 'patrollers_live.json'
+
+def load_json(f):
+    if not os.path.exists(f): return []
+    try:
+        with open(f) as fh:
+            d=json.load(fh)
+            return d if isinstance(d,list) else []
+    except: return []
+
+def save_json(f,data):
+    with open(f,'w') as fh: json.dump(data,fh,indent=2)
+
+@app.route('/')
+def home(): return send_from_directory('.', 'login.html') if os.path.exists('login.html') else ("Zondi API",200)
+
+@app.route('/login')
+@app.route('/login.html')
+def login_page(): return send_from_directory('.', 'login.html')
+
+@app.route('/register')
+@app.route('/register.html')
+def reg_page(): return send_from_directory('.', 'register.html')
+
+@app.route('/clients')
+@app.route('/clients.html')
+def clients_page(): return send_from_directory('.', 'clients.html')
+
+@app.route('/patrollers')
+@app.route('/patrol')
+@app.route('/patrollers.html')
+@app.route('/patrol.html')
+def patrol_page(): return send_from_directory('.', 'patrol.html')
+
+@app.route('/api/sos', methods=['POST'])
+def api_sos():
+    data=request.json or {}
+    data['time']=datetime.now().isoformat()
+    feed=load_json(SOS_FILE)
+    feed.append(data)
+    if len(feed)>1000: feed=feed[-1000:]
+    save_json(SOS_FILE,feed)
+    return jsonify({"ok":True})
+
+@app.route('/api/sos-feed')
+def api_feed(): return jsonify(load_json(SOS_FILE)[-300:])
+
+@app.route('/api/tracking/<phone_id>')
+def api_tracking(phone_id):
+    feed=load_json(SOS_FILE)
+    return jsonify([x for x in feed if x.get('phoneId')==phone_id and x.get('lat')][-100:])
+
+@app.route('/api/patroller-ping', methods=['POST'])
+def pp():
+    d=request.json or {}
+    d['time']=datetime.now().isoformat()
+    data=load_json(PATROLLER_FILE)
+    data=[x for x in data if x.get('email')!=d.get('email')]
+    data.append(d)
+    save_json(PATROLLER_FILE,data)
+    return jsonify({"ok":True})
+
+@app.route('/api/patrollers-live')
+def pl():
+    data=load_json(PATROLLER_FILE)
+    cutoff=datetime.now()-timedelta(minutes=5)
+    fresh=[]
+    for p in data:
+        try:
+            if datetime.fromisoformat(p.get('time',''))>cutoff: fresh.append(p)
+        except: fresh.append(p)
+    return jsonify(fresh)
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    d=request.json or {}
+    users=load_json(USERS_FILE)
+    email=d.get('email','').lower().strip()
+    pwd=d.get('password','')
+    u=next((x for x in users if x.get('email','').lower()==email and x.get('password')==pwd), None)
+    if u: return jsonify(u)
+    return jsonify({"error":"Wrong email or password"}),401
+
+@app.route('/api/signup', methods=['POST'])
+@app.route('/api/register', methods=['POST'])
+def api_reg():
+    d=request.json or {}
+    users=load_json(USERS_FILE)
+    email=d.get('email','').lower().strip()
+    if not email or not d.get('password'):
+        return jsonify({"error":"Email and password required"}),400
+    if any(x.get('email','').lower()==email for x in users):
+        return jsonify({"error":"Email already registered. Go to Login"}),400
+    users.append(d)
+    save_json(USERS_FILE,users)
+    return jsonify({"ok":True,"user":d})
+
+@app.route('/<path:path>')
+def catch_all(path):
+    if os.path.exists(path) and os.path.isfile(path):
+        return send_from_directory('.', path)
+    if path.startswith('api/'): return jsonify({"error":"not found"}),404
+    return send_from_directory('.', 'login.html')
+
+if __name__=='__main__':
+    for f in [SOS_FILE,USERS_FILE,PATROLLER_FILE]:
+        if not os.path.exists(f): save_json(f,[])
+    app.run(host='0.0.0.0',port=10000)
