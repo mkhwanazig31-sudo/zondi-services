@@ -4,7 +4,7 @@ Install: pip install flask flask-cors flask-socketio eventlet
 Run: python zondi_v3.py
 """
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session, redirect
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import json, os, threading
@@ -14,7 +14,11 @@ from werkzeug.utils import safe_join
 import uuid
 
 app = Flask(__name__, static_folder='.')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'zondi-secret-change-me')
+app.config['SECRET_KEY'] = os.environ.get(
+    'SECRET_KEY',
+    'zondi-secret-change-me'
+)
+app.permanent_session_lifetime = timedelta(hours=8)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False)
 
@@ -61,6 +65,12 @@ for route in ['/login','/login.html','/register','/register.html','/clients','/c
     def page_handler(route=route):
         # strip leading /
         fname = route.strip('/').split('.')[0] + '.html'
+        # Developer Portal requires a server-side session.
+        # The password itself is never stored in this HTML/JS.
+        if route in ['/dev','/dev.html','/admin','/admin.html']:
+            if not session.get('dev_authenticated'):
+                return redirect('/login?dev=1')
+
         # map /dev and /admin to dev_portal.html if exists
         if fname in ['admin.html','dev.html']:
             if os.path.exists('dev_portal.html'): return send_from_directory('.', 'dev_portal.html')
@@ -122,12 +132,50 @@ def api_login():
 
     return jsonify(sanitize_user(u))
 
+# ===== DEVELOPER PORTAL AUTH =====
+@app.route('/api/dev-login', methods=['POST'])
+def dev_login():
+    d = request.get_json(silent=True) or {}
+    password = d.get('password', '')
+
+    expected_password = os.environ.get('DEV_PORTAL_PASSWORD', '')
+    if not expected_password:
+        return jsonify({
+            "error": "Developer portal password is not configured on the server"
+        }), 503
+
+    if password != expected_password:
+        return jsonify({"error": "Incorrect developer password"}), 401
+
+    session.permanent = True
+    session['dev_authenticated'] = True
+
+    return jsonify({
+        "ok": True,
+        "redirect": "/dev"
+    })
+
+
+@app.route('/api/dev-logout', methods=['POST'])
+def dev_logout():
+    session.pop('dev_authenticated', None)
+    return jsonify({"ok": True})
+
+
+def require_dev_auth():
+    if not session.get('dev_authenticated'):
+        return jsonify({
+            "error": "developer authentication required"
+        }), 401
+    return None
+
+
 # ===== DEV PORTAL - APPROVE PATROLLERS =====
 @app.route('/api/admin/pending')
 def admin_pending():
-    # Simple auth via query ?admin_key=YOUR_SECRET
-    if request.args.get('admin_key')!=os.environ.get('ADMIN_KEY','zondi_admin_123'):
-        return jsonify({"error":"unauthorized - set ADMIN_KEY env"}),401
+    auth_error = require_dev_auth()
+    if auth_error:
+        return auth_error
     users=load_json(FILES['users'])
     pending=[sanitize_user(x) for x in users if x.get('role')=='patroller' and x.get('status')=='pending']
     all_patrollers=[sanitize_user(x) for x in users if x.get('role')=='patroller']
@@ -135,9 +183,11 @@ def admin_pending():
 
 @app.route('/api/admin/approve', methods=['POST'])
 def admin_approve():
+    auth_error = require_dev_auth()
+    if auth_error:
+        return auth_error
+
     d=request.get_json(silent=True) or {}
-    if d.get('admin_key')!=os.environ.get('ADMIN_KEY','zondi_admin_123'):
-        return jsonify({"error":"unauthorized"}),401
     email=d.get('email','').lower().strip()
     action=d.get('action','approve') # approve / reject / revoke
     users=load_json(FILES['users'])
@@ -280,7 +330,7 @@ def radio_http():
 if __name__=='__main__':
     init_files()
     print("Zondi v3 - T2770 Radio Running")
-    print("Admin key:", os.environ.get('ADMIN_KEY','zondi_admin_123'))
+    print("Developer Portal: protected by DEV_PORTAL_PASSWORD")
     print("Dev portal: /dev.html or /admin.html")
     print("Radio: /radio.html")
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT',10000)), debug=False)
