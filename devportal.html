@@ -77,6 +77,18 @@
     const pendingList = document.getElementById('pendingList');
     const allList = document.getElementById('allList');
 
+    function devHeaders(extra = {}) {
+      const token = sessionStorage.getItem('zondi_dev_token');
+      const headers = Object.assign({}, extra);
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return headers;
+    }
+
+    function clearDevTokenAndLogin() {
+      sessionStorage.removeItem('zondi_dev_token');
+      window.location.href = '/login?dev=1';
+    }
+
     function escapeHtml(value) {
       return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
     }
@@ -151,10 +163,10 @@
       allList.innerHTML = '';
 
       try {
-        const res = await fetch('/api/admin/pending', { credentials:'same-origin' });
+        const res = await fetch('/api/admin/pending', { headers: devHeaders() });
         const data = await res.json().catch(() => ({}));
         if (res.status === 401 || res.status === 403) {
-          window.location.href = '/login?dev=1';
+          clearDevTokenAndLogin();
           return;
         }
         if (!res.ok) throw new Error(data.error || 'Unable to load the portal.');
@@ -173,14 +185,13 @@
       try {
         const res = await fetch('/api/admin/approve', {
           method:'POST',
-          credentials:'same-origin',
-          headers:{'Content-Type':'application/json'},
+          headers:devHeaders({'Content-Type':'application/json'}),
           body:JSON.stringify({ email, action })
         });
 
         const data = await res.json().catch(() => ({}));
         if (res.status === 401 || res.status === 403) {
-          window.location.href = '/login?dev=1';
+          clearDevTokenAndLogin();
           return;
         }
         if (!res.ok || !data.ok) throw new Error(data.error || 'Action failed.');
@@ -197,7 +208,13 @@
     }
 
     async function logout() {
-      try { await fetch('/api/dev-logout', { method:'POST', credentials:'same-origin' }); } catch {}
+      try {
+        await fetch('/api/dev-logout', {
+          method:'POST',
+          headers:devHeaders()
+        });
+      } catch {}
+      sessionStorage.removeItem('zondi_dev_token');
       window.location.href = '/login';
     }
 
