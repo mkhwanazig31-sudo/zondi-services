@@ -1,140 +1,217 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#f8f6f3">
-<title>Zondi Dev Portal - Welcoming</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:'Plus Jakarta Sans',system-ui}
-body{background:#f8f6f3;color:#2d2a26;min-height:100vh;padding:0}
-.topbar{background:#ffffff;border-bottom:1px solid #eee8e0;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10}
-.logo{display:flex;align-items:center;gap:12px}
-.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,#2d2a26,#57534e);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
-.page{max-width:720px;margin:0 auto;padding:20px}
-.hero{background:linear-gradient(135deg,#ffffff,#fefce8);border:1px solid #f0ebe4;border-radius:24px;padding:20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,.04)}
-.hero h2{font-size:20px;font-weight:800;letter-spacing:-.5px}
-.hero p{font-size:13px;color:#8b8680;margin-top:4px}
-.stats{display:flex;gap:8px;margin-top:12px}
-.stat{background:#ffffff;border:1px solid #f0ebe4;border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700}
-.card{background:#ffffff;border:1px solid #f0ebe4;border-radius:20px;padding:16px;margin-bottom:16px;box-shadow:0 2px 20px rgba(0,0,0,.03)}
-.card h3{font-size:15px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.empty{text-align:center;padding:30px 20px;color:#9a9590;background:#fcfaf8;border-radius:16px;border:1px dashed #e7ddd3}
-.user-card{display:flex;gap:12px;padding:14px;background:#fcfaf8;border:1px solid #f5f0eb;border-radius:16px;margin-bottom:10px;align-items:center;transition:.2s}
-.user-card:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.05);background:#fff}
-.avatar{width:44px;height:44px;background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#92400e;flex-shrink:0}
-.user-info{flex:1;min-width:0}
-.user-info b{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.user-info small{font-size:12px;color:#8b8680}
-.actions{display:flex;gap:8px;margin-top:10px}
-.btn{padding:10px 16px;border-radius:12px;border:0;font-weight:700;font-size:13px;cursor:pointer;transition:.15s}
-.btn:active{transform:scale(.97)}
-.btn-approve{background:#2d2a26;color:#fff}
-.btn-approve:hover{background:#000}
-.btn-reject{background:#ffffff;border:1px solid #e7ddd3;color:#57534e}
-.btn-reject:hover{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
-.btn-revoke{background:#f8f6f3;border:1px solid #e7ddd3;color:#8b8680;font-size:12px;padding:8px 12px}
-.badge{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
-.badge-pending{background:#fef3c7;color:#92400e}
-.badge-approved{background:#dcfce7;color:#166534}
-.badge-rejected{background:#fee2e2;color:#991b1b}
-.list-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f8f6f3;border-radius:12px;margin-bottom:8px}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#07100b">
+  <meta name="color-scheme" content="dark">
+  <title>Zondi — Developer Portal</title>
+  <style>
+    :root{
+      --bg:#050806;--surface:#0b110d;--surface2:#101812;--surface3:#151e17;
+      --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.11);
+      --text:#f5f8f6;--muted:#8b9690;--green:#22c55e;--green2:#4ade80;
+      --red:#ef4444;--amber:#f59e0b;--radius:18px
+    }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
+    body{min-height:100vh;background:radial-gradient(circle at 10% -5%,rgba(34,197,94,.11),transparent 28%),var(--bg);color:var(--text)}
+    button{font:inherit;cursor:pointer}
+    .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:rgba(7,12,8,.95);backdrop-filter:blur(18px);border-bottom:1px solid var(--border)}
+    .brand{display:flex;align-items:center;gap:11px}.logo{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,var(--green2),#16a34a);color:#03200b;font-size:18px;box-shadow:0 8px 20px rgba(34,197,94,.16)}
+    .brand-title{font-size:14px;font-weight:900;letter-spacing:.08em}.brand-sub{margin-top:3px;color:var(--muted);font-size:10px}
+    .logout{border:1px solid rgba(239,68,68,.14);background:rgba(239,68,68,.06);color:#ffaaaa;border-radius:10px;padding:9px 11px;font-size:10px;font-weight:800}
+    .page{width:min(900px,100%);margin:0 auto;padding:18px 14px 40px}
+    .hero{padding:18px;border:1px solid rgba(34,197,94,.12);border-radius:22px;background:radial-gradient(circle at 100% 0%,rgba(34,197,94,.10),transparent 38%),linear-gradient(145deg,#101a12,#09100b);box-shadow:0 20px 45px rgba(0,0,0,.18);margin-bottom:14px}
+    .hero-title{font-size:21px;font-weight:900;letter-spacing:-.03em}.hero-copy{margin-top:6px;color:var(--muted);font-size:11px;line-height:1.5}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.stat{padding:11px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.025)}.stat-value{font-size:18px;font-weight:900}.stat-label{margin-top:3px;color:var(--muted);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+    .section{margin-top:14px;padding:15px;border-radius:20px;border:1px solid var(--border);background:rgba(255,255,255,.025)}
+    .section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}.section-title{font-size:13px;font-weight:900}.section-sub{margin-top:3px;color:var(--muted);font-size:9px}
+    .refresh{border:1px solid var(--border);background:rgba(255,255,255,.035);color:#dce5df;border-radius:10px;width:34px;height:34px}
+    .user-card{display:flex;gap:11px;align-items:flex-start;padding:12px;border-radius:15px;border:1px solid var(--border);background:rgba(255,255,255,.025);margin-bottom:8px}.avatar{width:40px;height:40px;flex:0 0 40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(34,197,94,.10);font-size:15px;font-weight:900;color:#bbf7d0}.info{min-width:0;flex:1}.name{font-size:12px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.email{margin-top:3px;color:#aeb8b2;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.meta{margin-top:5px;color:var(--muted);font-size:8px}.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.btn{border:0;border-radius:9px;padding:8px 10px;font-size:9px;font-weight:900}.approve{background:linear-gradient(135deg,var(--green2),#16a34a);color:#03200b}.reject{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.16);color:#ffadad}.revoke{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.16);color:#fcd34d}.badge{display:inline-flex;padding:4px 7px;border-radius:999px;font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}.pending{background:rgba(245,158,11,.10);color:#fcd34d}.approved{background:rgba(34,197,94,.10);color:#bbf7d0}.rejected{background:rgba(239,68,68,.10);color:#fecaca}
+    .empty{padding:28px 16px;border-radius:15px;border:1px dashed var(--border2);background:rgba(255,255,255,.015);text-align:center;color:var(--muted)}.empty-icon{font-size:28px;margin-bottom:8px}.empty-title{color:#dfe7e1;font-size:11px;font-weight:900}.empty-copy{margin-top:4px;font-size:9px;line-height:1.5}
+    .notice{padding:11px 12px;border-radius:13px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.10);color:#b8ebc8;font-size:9px;line-height:1.5;margin-top:10px}
+    .toast{position:fixed;left:50%;bottom:18px;z-index:1000;width:min(calc(100% - 28px),460px);padding:12px 14px;border-radius:13px;background:rgba(13,20,15,.97);border:1px solid var(--border2);box-shadow:0 18px 45px rgba(0,0,0,.35);font-size:10px;font-weight:700;transform:translate(-50%,15px);opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.toast.error{border-color:rgba(239,68,68,.25);color:#ffb0b0}
+    @media(max-width:560px){.stats{grid-template-columns:1fr 1fr 1fr}.user-card{align-items:flex-start}.actions .btn{flex:1}.topbar{padding-left:12px;padding-right:12px}}
+  </style>
 </head>
 <body>
-<div class="topbar">
-  <div class="logo">
-    <div class="logo-icon">🛡️</div>
-    <div><div style="font-weight:800;font-size:14px">ZONDI</div><div style="font-size:11px;color:#9a9590">Dev Portal</div></div>
-  </div>
-  <div style="font-size:12px;color:#8b8680">{{ user.username }} • <a href="/patrol" style="color:#2d2a26;font-weight:700;text-decoration:none">Patrol →</a></div>
-</div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🛡️</div>
+      <div><div class="brand-title">ZONDI</div><div class="brand-sub">Developer Portal</div></div>
+    </div>
+    <button class="logout" onclick="logout()">Sign out</button>
+  </header>
 
-<div class="page">
-  <div class="hero">
-    <div>
-      <h2>Welcome back, {{ user.username }} 👋</h2>
-      <p>Manage your community patrollers. Keep Ga-Rankuwa safe together.</p>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-title">Patroller management</div>
+      <div class="hero-copy">Approve trusted patrollers, review their status, and manage access to the Zondi response network.</div>
       <div class="stats">
-        <div class="stat">⏳ {{ pending|length }} pending</div>
-        <div class="stat">👮 {{ all_patrollers|length }} total patrollers</div>
-        <div class="stat">🌿 Live</div>
+        <div class="stat"><div class="stat-value" id="pendingCount">—</div><div class="stat-label">Pending</div></div>
+        <div class="stat"><div class="stat-value" id="approvedCount">—</div><div class="stat-label">Approved</div></div>
+        <div class="stat"><div class="stat-value" id="totalCount">—</div><div class="stat-label">Total</div></div>
       </div>
-    </div>
-    <div style="font-size:36px">🏘️</div>
-  </div>
+      <div class="notice">Approved patrollers stay approved until you explicitly reject or revoke them. Their existing email and password remain their login credentials.</div>
+    </section>
 
-  <div class="card">
-    <h3>⏳ Awaiting your approval</h3>
-    {% if pending|length==0 %}
-      <div class="empty">
-        <div style="font-size:32px;margin-bottom:8px">✨</div>
-        <b>All caught up!</b><br>
-        <small>No new patrollers waiting. Community is secure.</small>
+    <section class="section">
+      <div class="section-head">
+        <div><div class="section-title">Pending approvals</div><div class="section-sub">New patrollers waiting for access</div></div>
+        <button class="refresh" onclick="loadPortal()" aria-label="Refresh">↻</button>
       </div>
-    {% endif %}
-    {% for u in pending %}
-    <div class="user-card">
-      <div class="avatar">{{ u['username'][0]|upper }}</div>
-      <div class="user-info">
-        <b>{{ u['username'] }}</b>
-        <small>📞 {{ u['phone'] or 'No phone' }} • Joined {{ (u['created_at']|int)|default('recently') }}</small>
-        <div style="margin-top:6px"><span class="badge badge-pending">{{ u['status'] }}</span></div>
-        <div class="actions">
-          <button class="btn btn-approve" onclick="act('{{ u['username'] }}','approve')">✅ Approve & Welcome</button>
-          <button class="btn btn-reject" onclick="act('{{ u['username'] }}','reject')">Reject</button>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
+      <div id="pendingList"></div>
+    </section>
 
-  <div class="card">
-    <h3>👮 Your patroller family</h3>
-    <p style="font-size:12px;color:#8b8680;margin-bottom:12px">Everyone who keeps the community safe</p>
-    {% for u in all_patrollers %}
-    <div class="list-item">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:32px;height:32px;background:#fff;border:1px solid #f0ebe4;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">{{ u['username'][0]|upper }}</div>
-        <div><b style="font-size:13px">{{ u['username'] }}</b><br><small style="color:#8b8680">{{ u['phone'] }}</small></div>
+    <section class="section">
+      <div class="section-head">
+        <div><div class="section-title">All patrollers</div><div class="section-sub">Current account status</div></div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="badge {% if u['status']=='approved' %}badge-approved{% elif u['status']=='pending' %}badge-pending{% else %}badge-rejected{% endif %}">{{ u['status'] }}</span>
-        {% if u['status']=='approved' %}
-          <button class="btn btn-revoke" onclick="act('{{ u['username'] }}','revoke')">Revoke</button>
-        {% else %}
-          <button class="btn btn-approve" style="padding:8px 12px;font-size:12px" onclick="act('{{ u['username'] }}','approve')">Approve</button>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
+      <div id="allList"></div>
+    </section>
+  </main>
 
-  <div style="text-align:center;padding:20px;color:#c4bdb5;font-size:11px">
-    Zondi • Community Safety • Made with 💛 for Ga-Rankuwa, Mabopane & Soshanguve<br>
-    v3.1 Welcoming Edition • T2770 Radio • PWA Ready
-  </div>
-</div>
+  <div id="toast" class="toast"></div>
 
-<script>
-async function act(username, action){
-  const btn=event.target;
-  const original=btn.textContent;
-  btn.textContent='...'; btn.disabled=true;
-  const res=await fetch('/api/admin/approve',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({username, action, admin_key:'zondi_admin_123'})
-  });
-  const data=await res.json();
-  if(data.ok){ 
-    btn.textContent='Done ✓';
-    setTimeout(()=>location.reload(),600);
-  } else {
-    alert('Error: '+(data.error||'unknown'));
-    btn.textContent=original; btn.disabled=false;
-  }
-}
-</script>
+  <script>
+    const pendingList = document.getElementById('pendingList');
+    const allList = document.getElementById('allList');
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    }
+
+    function initial(name, email) {
+      const v = String(name || email || 'P').trim();
+      return (v[0] || 'P').toUpperCase();
+    }
+
+    function formatDate(value) {
+      if (!value) return 'Recently joined';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return 'Recently joined';
+      return d.toLocaleDateString([], { day:'numeric', month:'short', year:'numeric' });
+    }
+
+    function badge(status) {
+      const cls = status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending';
+      return `<span class="badge ${cls}">${escapeHtml(status || 'pending')}</span>`;
+    }
+
+    function userCard(user, pendingOnly=false) {
+      const name = escapeHtml(user.name || user.email || 'Patroller');
+      const email = escapeHtml(user.email || '');
+      const phone = escapeHtml(user.phone || 'No phone provided');
+      const status = user.status || 'pending';
+
+      let actions = '';
+      if (pendingOnly || status === 'pending' || status === 'rejected') {
+        actions += `<button class="btn approve" onclick="act('${encodeURIComponent(user.email)}','approve',this)">Approve</button>`;
+      }
+      if (pendingOnly || status === 'pending') {
+        actions += `<button class="btn reject" onclick="act('${encodeURIComponent(user.email)}','reject',this)">Reject</button>`;
+      }
+      if (status === 'approved') {
+        actions += `<button class="btn revoke" onclick="act('${encodeURIComponent(user.email)}','revoke',this)">Revoke access</button>`;
+      }
+
+      return `
+        <article class="user-card">
+          <div class="avatar">${escapeHtml(initial(user.name, user.email))}</div>
+          <div class="info">
+            <div class="name">${name}</div>
+            <div class="email">${email}</div>
+            <div class="meta">📞 ${phone} · Joined ${formatDate(user.created_at)}</div>
+            <div style="margin-top:7px">${badge(status)}</div>
+            <div class="actions">${actions}</div>
+          </div>
+        </article>`;
+    }
+
+    function renderUsers(pending, all) {
+      document.getElementById('pendingCount').textContent = pending.length;
+      document.getElementById('approvedCount').textContent = all.filter(u => u.status === 'approved').length;
+      document.getElementById('totalCount').textContent = all.length;
+
+      if (!pending.length) {
+        pendingList.innerHTML = `<div class="empty"><div class="empty-icon">✨</div><div class="empty-title">All caught up</div><div class="empty-copy">There are no patrollers waiting for approval.</div></div>`;
+      } else {
+        pendingList.innerHTML = pending.map(u => userCard(u, true)).join('');
+      }
+
+      if (!all.length) {
+        allList.innerHTML = `<div class="empty"><div class="empty-icon">👮</div><div class="empty-title">No patrollers yet</div><div class="empty-copy">Approved and pending patroller accounts will appear here.</div></div>`;
+      } else {
+        allList.innerHTML = all.map(u => userCard(u)).join('');
+      }
+    }
+
+    async function loadPortal() {
+      pendingList.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-title">Loading</div><div class="empty-copy">Checking patroller accounts…</div></div>`;
+      allList.innerHTML = '';
+
+      try {
+        const res = await fetch('/api/admin/pending', { credentials:'same-origin' });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/login?dev=1';
+          return;
+        }
+        if (!res.ok) throw new Error(data.error || 'Unable to load the portal.');
+        renderUsers(data.pending || [], data.all_patrollers || []);
+      } catch (err) {
+        pendingList.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Portal unavailable</div><div class="empty-copy">${escapeHtml(err.message)}</div></div>`;
+      }
+    }
+
+    async function act(encodedEmail, action, button) {
+      const email = decodeURIComponent(encodedEmail);
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = '…';
+
+      try {
+        const res = await fetch('/api/admin/approve', {
+          method:'POST',
+          credentials:'same-origin',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ email, action })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/login?dev=1';
+          return;
+        }
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Action failed.');
+
+        if (action === 'approve') showToast(`${email} is now approved.`);
+        if (action === 'reject') showToast(`${email} was rejected.`);
+        if (action === 'revoke') showToast(`${email} access was revoked.`);
+        await loadPortal();
+      } catch (err) {
+        button.disabled = false;
+        button.textContent = original;
+        showToast(err.message, true);
+      }
+    }
+
+    async function logout() {
+      try { await fetch('/api/dev-logout', { method:'POST', credentials:'same-origin' }); } catch {}
+      window.location.href = '/login';
+    }
+
+    function showToast(message, error=false) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.classList.toggle('error', error);
+      el.classList.add('show');
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => el.classList.remove('show'), 2800);
+    }
+
+    loadPortal();
+    setInterval(loadPortal, 30000);
+  </script>
 </body>
 </html>
