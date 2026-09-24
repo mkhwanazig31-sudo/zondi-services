@@ -3400,7 +3400,22 @@ content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
       },
       500
     );
-
+// ===== DNW PB708 - DO NOT DELETE =====
+async function registerDNW(){
+  const id=document.getElementById('dnwId').value.trim();
+  const name=document.getElementById('dnwName').value||id;
+  const type=document.getElementById('dnwType').value;
+  if(!id) return alert('Enter PB708 ID from QR');
+  navigator.geolocation.getCurrentPosition(async p=>{
+    const auth=JSON.parse(localStorage.getItem('zondi_user')||'{}');
+    const body={stickerId:id,name:name,type:type,owner:auth.email||'client',lat:p.coords.latitude,lng:p.coords.longitude,address:type};
+    await fetch('/api/dnw/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    await fetch('/api/dnw/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    document.getElementById('dnwStatus').innerText='✅ '+name+' live on patrol map';
+    document.getElementById('dnwStatus').style.color='#22c55e';
+  });
+}
+// ===== END DNW =====
   </script>
 
 </body>
