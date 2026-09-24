@@ -808,14 +808,25 @@
       }
     });
 
-    const devModal = document.getElementById("devModal");
-    const openDevBtn = document.getElementById("openDevBtn");
-    const closeDevBtn = document.getElementById("closeDevBtn");
-    const devOverlay = document.getElementById("devOverlay");
-    const devPassword = document.getElementById("devPassword");
-    const devError = document.getElementById("devError");
-    const devLoginButton = document.getElementById("devLoginButton");
-
+    const devModal=document.getElementById('devModal');
+document.getElementById('openDevBtn').onclick=()=>devModal.classList.add('show');
+document.getElementById('closeDevBtn').onclick=()=>devModal.classList.remove('show');
+document.getElementById('devOverlay').onclick=()=>devModal.classList.remove('show');
+document.getElementById('devLoginButton').onclick=async()=>{
+  const pw=document.getElementById('devPassword').value.trim();
+  const err=document.getElementById('devError');
+  const btn=document.getElementById('devLoginButton');
+  if(!pw){err.textContent='Enter password';err.classList.add('show');return;}
+  btn.disabled=true; btn.textContent='Checking...';
+  try{
+    let r=await fetch('/api/developer-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    let j=await r.json();
+    if(!r.ok) throw new Error(j.error);
+    sessionStorage.setItem('zondi_dev_token', j.token);
+    localStorage.setItem('zondi_auth', JSON.stringify({role:'developer',email:'dev@dnw'}));
+    location.href='/developers.html';
+  }catch(e){err.textContent=e.message;err.classList.add('show');btn.disabled=false;btn.textContent='Enter Developer Portal →';}
+};
     function openDevPortal() {
       devError.classList.remove("show");
       devError.textContent = "";
