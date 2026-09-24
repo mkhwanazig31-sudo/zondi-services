@@ -853,6 +853,29 @@
         let data = {};
         try { data = await response.json(); } catch { data = {}; }
         if (!response.ok) throw new Error(data.error || "Developer access denied.");
+
+        if (!data.token) {
+          throw new Error("Developer token was not returned by the server.");
+        }
+
+        sessionStorage.setItem("zondi_dev_token", data.token);
+
+        const verify = await fetch("/api/dev-status", {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${data.token}`
+          }
+        });
+
+        const status = await verify.json().catch(() => ({}));
+
+        if (!verify.ok || !status.authenticated) {
+          sessionStorage.removeItem("zondi_dev_token");
+          throw new Error(
+            status.error || "Developer access could not be verified."
+          );
+        }
+
         window.location.href = data.redirect || "/dev";
       } catch (error) {
         console.error("Developer login error:", error);
