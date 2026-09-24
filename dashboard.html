@@ -1,53 +1,61 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#07100b">
+<title>Zondi — Patrol</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
-body{background:#0a0c10;color:#fff;min-height:100vh;padding-bottom:90px}
-.header{padding:20px;display:flex;justify-content:space-between;align-items:center}
-.card{background:#151821;border:1px solid #1e222f;border-radius:20px;padding:16px;margin:0 16px 12px 16px}
-#sosBtn{width:100%;height:180px;border-radius:24px;border:0;background:linear-gradient(180deg,#ff3b30,#991b1b);color:#fff;font-size:30px;font-weight:900;box-shadow:0 12px 40px #ff3b3044}
-#sosBtn:active{transform:scale(.97)}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#151821;border-top:1px solid #1e222f;display:flex;padding:12px 0 28px 0;max-width:500px;margin:0 auto}
-.nav-item{flex:1;text-align:center;color:#6b7280;font-size:11px;font-weight:700}
-.nav-item.active{color:#22c55e}
-.log{font-family:monospace;font-size:11px;background:#0a0c10;border-radius:10px;padding:8px;height:100px;overflow-y:auto;margin-top:8px}
+:root{--bg:#050806;--surface:#0b110d;--border:rgba(255,255,255,.07);--text:#f7faf8;--muted:#8c9890;--green:#22c55e;--green2:#4ade80;--red:#ef4444;--amber:#f59e0b}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,sans-serif}
+body{background:var(--bg);color:var(--text);min-height:100vh}
+.top{position:sticky;top:0;z-index:20;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(5,8,6,.97);border-bottom:1px solid var(--border)}
+.brand{display:flex;gap:10px;align-items:center}.logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,var(--green2),#16a34a);display:flex;align-items:center;justify-content:center}
+#map{width:100%;height:52vh;background:#0d1410}
+.card{margin:10px 14px;padding:14px;border-radius:18px;border:1px solid var(--border);background:rgba(255,255,255,.025)}
+.sosBtn{width:100%;min-height:64px;border:0;border-radius:16px;background:linear-gradient(135deg,#f05252,#dc2626);color:#fff;font-weight:900;font-size:15px}
+.log{font-family:monospace;font-size:11px;background:#060a07;border-radius:12px;padding:10px;max-height:160px;overflow:auto;margin-top:8px}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(470px,100%);display:grid;grid-template-columns:repeat(3,1fr);background:rgba(6,10,7,.98);border-top:1px solid var(--border);padding:8px}
+.nav div{padding:10px;text-align:center;color:#6f7b73;font-size:10px;font-weight:700}
+.nav .active{color:var(--green2)}
+.badge{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:8px;font-weight:900}
+.live{background:rgba(34,197,94,.12);color:#bbf7d0}
+.dnw{background:rgba(245,158,11,.12);color:#fcd34d}
 </style>
 </head>
 <body>
-<div class="header"><b>🆘 ZONDI</b><span style="font-size:12px;background:#1e222f;padding:6px 10px;border-radius:20px">{{ user.username }}</span></div>
+<div class="top"><div class="brand"><div class="logo">🛡️</div><div><div style="font-weight:900;letter-spacing:.08em;font-size:13px">ZONDI PATROL</div><div id="me" style="font-size:10px;color:var(--muted)">Loading...</div></div></div><button onclick="logout()" style="border:1px solid var(--border);background:rgba(255,255,255,.03);color:#fff;padding:8px 12px;border-radius:10px;font-size:10px">Logout</button></div>
 
-<div class="card" style="text-align:center">
-  <button id="sosBtn" onclick="sendSOS()">🚨<br>SOS</button>
-  <input id="msg" placeholder="What happened? (optional)" style="width:100%;margin-top:12px;padding:12px;border-radius:12px;background:#0a0c10;border:1px solid #1e222f;color:#fff">
-  <div id="status" style="margin-top:10px;font-size:13px;color:#6b7280"></div>
+<div id="map"></div>
+
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">📡 CH1 Ga-Rankuwa - Listening</b><span class="badge live">● LIVE</span></div>
+<div style="margin-top:10px;display:flex;gap:8px">
+<button onclick="toggleRadio()" id="radioBtn" style="flex:1;padding:10px;border-radius:12px;border:1px solid var(--border);background:#101812;color:#fff;font-weight:800">🔊 Radio OFF</button>
+<button onclick="testSound()" style="padding:10px;border-radius:12px;border:1px solid rgba(34,197,94,.15);background:rgba(34,197,94,.08);color:#bbf7d0">🔔 Test Loud</button>
+</div>
+<div id="radioLog" class="log">Radio ready - loud howl fix enabled<br>DNW PB708 assets will appear here...</div>
 </div>
 
 <div class="card">
-  <b>📻 CH1 Ga-Rankuwa - Listening</b>
-  <div id="radioLog" class="log"></div>
+<div style="display:flex;justify-content:space-between"><b style="font-size:12px">🚨 Live SOS + DNW PB708 Assets</b><button onclick="loadLive()" style="border:0;background:transparent;color:var(--green2);font-size:10px;font-weight:800">↻ Refresh</button></div>
+<div id="sosList" style="margin-top:10px"></div>
 </div>
 
-<div class="bottom-nav">
-  <div class="nav-item active">🚨<br>SOS</div>
-  <div class="nav-item">📻<br>Radio</div>
-  <div class="nav-item" onclick="location.href='/logout'">👤<br>Logout</div>
+<div class="card" style="text-align:center">
+<button id="sosBtn" onclick="sendSOS()" class="sosBtn">🚨 SOS BACKUP</button>
+<input id="msg" placeholder="What happened? (optional)" style="width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:#fff">
+<div id="status" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
 </div>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<div class="nav"><div class="active">🚨<br>SOS</div><div>📻<br>Radio</div><div onclick="location.href='/logout'">🚪<br>Logout</div></div>
+
+<audio id="alertAudio" preload="auto">
+<source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+<source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
+</audio>
+
 <script>
-let lastPos=null;
-navigator.geolocation.watchPosition(p=>{lastPos=p},()=>{},{enableHighAccuracy:true});
-async function sendSOS(){
-  if(!lastPos) return alert('Allow location first');
-  const res=await fetch('/api/send-otp',{method:'POST'}); // you can replace with /panic
-  // Use your existing panic_alert socket
-  socket.emit('panic_alert',{username:'{{ user.username }}',lat:lastPos.coords.latitude,lng:lastPos.coords.longitude});
-  document.getElementById('status').textContent='✅ SOS SENT - Patrollers alerted on map!';
-}
-const socket=io();
-socket.on('audio_chunk',d=>{ new Audio(d.audio).play(); document.getElementById('radioLog').innerHTML+=`<div>🔊 ${d.username} talking</div>`; });
-</script>
-</body>
-</html>
+let map
