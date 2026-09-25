@@ -1,1 +1,215 @@
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box;font-family:Inter}body{margin:0;background:#FFF8F0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.card{background:white;max-width:380px;width:100%;border-radius:28px;padding:28px;box-shadow:0 10px 40px rgba(255,138,61,.15);border:1px solid #FFE5D0}.role{display:flex;gap:8px;margin-bottom:14px} .role div{flex:1;padding:10px;border-radius:12px;border:1.5px solid #FFE5D0;text-align:center;font-weight:700;cursor:pointer} .role div.active{background:#FF8A3D;color:white} input{width:100%;padding:14px;border-radius:14px;border:1.5px solid #FFE5D0;background:#FFFBF7;margin-bottom:12px} button{width:100%;padding:14px;border-radius:14px;border:0;font-weight:800;background:linear-gradient(135deg,#FF8A3D,#FF5E5E);color:white}</style></head><body><div class="card"><h1>👋 ZONDI</h1><p style="color:#8B7355;font-size:14px">Welcoming • Safe • Connected</p><div class="role"><div id="r-client" class="active" onclick="setRole('client')">Client</div><div id="r-patrol" onclick="setRole('patrol')">Patrol</div></div><input id="email" placeholder="Email/phone"><input id="name" placeholder="Name"><button onclick="login()">Enter App →</button><div style="margin-top:16px;padding:14px;background:#FFF5EE;border-radius:14px;border:1px dashed #FFB067"><b>🔐 Developer</b><input id="devPass" type="password" placeholder="zondi@123" style="margin-top:8px"><button onclick="devLogin()">Unlock Dev Portal</button><div id="devErr" style="color:red;font-size:12px"></div></div></div><script>let role='client';function setRole(r){role=r;document.getElementById('r-client').classList.toggle('active',r=='client');document.getElementById('r-patrol').classList.toggle('active',r=='patrol')}async function login(){const e=document.getElementById('email').value||'client@zondi.com';const n=document.getElementById('name').value;const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,role})});const j=await res.json();localStorage.setItem('zondi_user',JSON.stringify(j.user));localStorage.setItem('zondi_name',n);location.href=role=='client'?'/clients.html':'/patrol.html'}async function devLogin(){const p=document.getElementById('devPass').value;const r=await fetch('/api/dev/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});const j=await r.json();if(j.ok)location.href='/developers.html';else document.getElementById('devErr').innerText=j.error}</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ZONDI | Secure Access 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0A0B;
+  --card:#141416;
+  --line:#232326;
+  --orange:#FF6B2C;
+  --orange2:#FF3D2E;
+  --text:#F5F3EF;
+  --muted:#9A9996;
+  --ok:#1FD07D;
+}
+*{box-sizing:border-box;font-family:'Manrope',Inter,system-ui}
+body{
+  margin:0;
+  background: radial-gradient(1200px 600px at 80% -10%, rgba(255,107,44,.18), transparent),
+            radial-gradient(900px 500px at -10% 110%, rgba(255,61,46,.12), transparent),
+            var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  padding:18px;
+}
+.shell{width:100%;max-width:420px}
+.top-badge{
+  display:flex;align-items:center;gap:10px;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:8px 14px;
+  font-size:12px;letter-spacing:.12em;
+  color:var(--muted);
+  margin:0 auto 18px; width:fit-content;
+}
+.dot{width:8px;height:8px;background:var(--ok);border-radius:50%;box-shadow:0 0 0 4px rgba(31,208,125,.15)}
+.card{
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  backdrop-filter: blur(24px);
+  border:1px solid var(--line);
+  border-radius:28px;
+  padding:26px;
+  box-shadow: 0 20px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.h1{font-size:32px;font-weight:800;letter-spacing:-.02em;margin:0}
+.sub{color:var(--muted);font-size:13.5px;margin:6px 0 18px;line-height:1.5}
+.shield{
+  display:flex;gap:10px;align-items:flex-start;
+  background:#15110F;
+  border:1px solid rgba(255,107,44,.25);
+  border-radius:16px;
+  padding:12px 13px;
+  font-size:12px;line-height:1.4;
+  color:#E8D5C8;
+  margin-bottom:18px;
+}
+.role{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  background:#0E0E10;border:1px solid var(--line);
+  padding:6px;border-radius:16px;margin-bottom:16px
+}
+.role button{
+  padding:11px;border-radius:12px;border:1px solid transparent;
+  background:transparent;color:var(--muted);font-weight:700;cursor:pointer
+}
+.role button.active{background:var(--text);color:#0A0A0B;border-color:var(--text)}
+.label{font-size:11px;letter-spacing:.14em;color:var(--muted);margin:14px 2px 6px;font-weight:700}
+.input{
+  width:100%;padding:14px 14px;border-radius:14px;
+  background:#0F0F11;border:1.5px solid var(--line);
+  color:var(--text);outline:none;font-size:15px;
+  transition:.2s;
+}
+.input:focus{border-color:rgba(255,107,44,.6);background:#121214}
+.input.err{border-color:#FF3D2E;background:rgba(255,61,46,.08)}
+.hint{font-size:11.5px;color:#FF8A7A;min-height:16px;margin:6px 2px 0}
+.row{display:flex;gap:10px}
+.btn{
+  width:100%;padding:15px;border-radius:14px;border:0;
+  font-weight:800;font-size:15px;cursor:pointer;
+  background:linear-gradient(135deg,var(--orange),var(--orange2));
+  color:white;letter-spacing:.02em;
+  box-shadow:0 10px 28px rgba(255,107,44,.35);
+  transition:.2s;
+}
+.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.dev{
+  margin-top:18px;
+  background:#0E0E10;border:1px dashed #2A2A2E;
+  border-radius:16px;padding:14px
+}
+.dev b{font-size:12px;letter-spacing:.12em}
+.lock-note{font-size:11px;color:var(--muted);margin-top:10px;text-align:center}
+.hp{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="top-badge"><div class="dot"></div> GA-RANKUWA • CH1 • ENCRYPTED 2026</div>
+  
+  <div class="card">
+    <h1 class="h1">ZONDI</h1>
+    <div class="sub">Protect. Trace. Recover. Verified access only. No guest logins.</div>
+
+    <div class="shield">
+      <span>🛡️</span>
+      <div><b>Scam Protection Active:</b> Patrol accounts require admin approval. Client accounts are verified by phone. Don't share OTP. Official domain only: <b>zondi-services.onrender.com</b></div>
+    </div>
+
+    <div class="role">
+      <button id="r-client" class="active" onclick="setRole('client')">Client</button>
+      <button id="r-patrol" onclick="setRole('patrol')">Patrol Unit</button>
+    </div>
+
+    <div class="label">EMAIL OR SA PHONE</div>
+    <input id="email" class="input" placeholder="e.g. you@email.com or 0691991669" autocomplete="username" inputmode="email">
+    <div id="eHint" class="hint"></div>
+
+    <div class="label">FULL NAME</div>
+    <input id="name" class="input" placeholder="As per ID" autocomplete="name">
+    <div id="nHint" class="hint"></div>
+
+    <!-- Honeypot for bots -->
+    <input id="website" class="hp" tabindex="-1" autocomplete="off">
+
+    <div class="label">ANTI-BOT CHECK</div>
+    <div class="row">
+      <input id="captchaQ" class="input" style="flex:0 0 90px;text-align:center" disabled>
+      <input id="captchaA" class="input" placeholder="Answer">
+    </div>
+    <div id="cHint" class="hint"></div>
+
+    <div style="height:14px"></div>
+    <button id="loginBtn" class="btn" onclick="login()">Enter Secure →</button>
+    <div id="rateHint" class="lock-note"></div>
+
+    <div class="dev">
+      <b>🔐 DEVELOPER PORTAL</b>
+      <div class="row" style="margin-top:10px">
+        <input id="devPass" type="password" class="input" placeholder="Dev key • 2026">
+        <button class="btn" style="flex:0 0 96px;padding:14px 10px" onclick="devLogin()">Unlock</button>
+      </div>
+      <div id="devErr" class="hint"></div>
+      <div class="lock-note">Attempts logged • IP bound • Render only</div>
+    </div>
+  </div>
+
+  <div class="lock-note">© 2026-2027 ZONDI • PB708 DNW • Ga-Rankuwa Zone</div>
+</div>
+
+<script>
+let role='client';
+let attempts = Number(localStorage.getItem('zondi_attempts')||0);
+let lockUntil = Number(localStorage.getItem('zondi_lock')||0);
+let a=0,b=0;
+
+function setRole(r){
+  role=r;
+  document.getElementById('r-client').classList.toggle('active',r=='client');
+  document.getElementById('r-patrol').classList.toggle('active',r=='patrol');
+}
+function genCaptcha(){
+  a = Math.floor(Math.random()*7)+2;
+  b = Math.floor(Math.random()*7)+1;
+  document.getElementById('captchaQ').value = `${a} + ${b} = ?`;
+}
+genCaptcha();
+
+function isEmailOrPhone(v){
+  const e = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  const p = /^0[6-8][0-9]{8}$/.test(v.replace(/\s/g,'')) || /^\+27[6-8][0-9]{8}$/.test(v.replace(/\s/g,''));
+  return e || p;
+}
+function showErr(id,msg){ document.getElementById(id).classList.add('err'); }
+function clearErr(id){ document.getElementById(id).classList.remove('err'); }
+
+function checkLock(){
+  const now=Date.now();
+  if(now < lockUntil){
+    const sec = Math.ceil((lockUntil-now)/1000);
+    document.getElementById('loginBtn').disabled=true;
+    document.getElementById('rateHint').innerText=`🔒 Too many tries. Retry in ${sec}s • Protected from scammers`;
+    setTimeout(checkLock,1000);
+    return true;
+  }else{
+    document.getElementById('loginBtn').disabled=false;
+    document.getElementById('rateHint').innerText='';
+    return false;
+  }
+}
+checkLock();
+
+async function login(){
+  if(checkLock()) return;
+  if(document.getElementById('website').value){ return; } // bot
+
+  const emailEl=document.getElementById('email');
+  const nameEl=document.getElementById('name');
+  const e=emailEl.value.trim();
+  const n=nameEl.value.trim();
+  const capAns=document.getElementById('captchaA').value.trim();
+
+  let ok=true;
+  document.getElementById('eHint').innerText='';
+  document.getElementById('nHint').innerText='';
+  document.getElementById('cHint').innerText='';
+  clearErr('email'); clearErr('name');
+
+  if(!isEmailOrPhone(e)){ document.getElementById('eHint').innerText='Enter valid email or SA number (06/07/08...)'; showErr('email'); ok=false; }
+  if(n.length<3){ document.getElementById('nHint').innerText='Enter full name min 
