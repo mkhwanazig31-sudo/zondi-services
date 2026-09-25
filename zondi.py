@@ -1,9 +1,10 @@
 import os
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
+# ================== CORE SETUP (YOUR ORIGINAL) ==================
 app = Flask(__name__, static_folder='.')
 app.secret_key = os.environ.get('SECRET_KEY', 'zondi-dev-only-change-in-prod')
 CORS(app, supports_credentials=True)
@@ -25,7 +26,8 @@ except Exception as e:
     print(f"Mongo failed: {e}")
     db = None
 
-MEM = {"locs":[], "sos":[], "dnw":[], "radio":[], "users":[]}
+# YOUR ORIGINAL MEM - KEPT SAME + ADDED 2 ON TOP
+MEM = {"locs":[], "sos":[], "dnw":[], "radio":[], "users":[], "dnw_assets":[], "dnw_scans":[]}
 
 def save(col, data):
     data['time'] = datetime.utcnow().isoformat()
@@ -52,6 +54,7 @@ def dev_required(f):
         return f(*args, **kwargs)
     return wrap
 
+# ================== STATIC (YOUR ORIGINAL) ==================
 @app.route('/')
 def home(): return send_from_directory('.', 'login.html')
 
@@ -59,6 +62,12 @@ def home(): return send_from_directory('.', 'login.html')
 def serve(filename):
     return send_from_directory('.', filename)
 
+# ================== ADDED: HEALTH CHECK FOR RENDER ==================
+@app.route('/health')
+def health():
+    return jsonify({"ok":True, "time":datetime.utcnow().isoformat(), "mongo": db is not None})
+
+# ================== AUTH (YOUR ORIGINAL - KEPT) ==================
 @app.route('/api/dev/login', methods=['POST'])
 def dev_login():
     pwd = (request.get_json() or {}).get('password','').strip()
@@ -74,6 +83,7 @@ def login():
     save('users', user)
     return jsonify({"ok":True,"user":user})
 
+# ================== LOCATION (YOUR ORIGINAL - KEPT) ==================
 @app.route('/api/location/update', methods=['POST'])
 def loc_update():
     data=request.get_json() or {}
@@ -85,6 +95,7 @@ def loc_update():
 @app.route('/api/location/live')
 def loc_live(): return jsonify(get('locs'))
 
+# ================== SOS (YOUR ORIGINAL - KEPT) ==================
 @app.route('/api/sos', methods=['POST'])
 def sos():
     save('sos', request.get_json() or {})
@@ -93,45 +104,4 @@ def sos():
 @app.route('/api/sos/live')
 def sos_live(): return jsonify(get('sos'))
 
-@app.route('/api/dnw/register', methods=['POST'])
-def dnw_reg():
-    save('dnw', request.get_json() or {})
-    return jsonify({"ok":True})
-
-@app.route('/api/dnw/scan', methods=['POST'])
-def dnw_scan():
-    save('dnw', request.get_json() or {})
-    return jsonify({"ok":True})
-
-@app.route('/api/dnw/live')
-def dnw_live(): return jsonify(get('dnw'))
-
-@app.route('/api/radio/send', methods=['POST'])
-def radio_send():
-    save('radio', request.get_json() or {})
-    return jsonify({"ok":True})
-
-@app.route('/api/radio/live')
-def radio_live(): return jsonify(get('radio'))
-
-@app.route('/api/users/list')
-@dev_required
-def users_list(): return jsonify(get('users'))
-
-@app.route('/api/users/approve', methods=['POST'])
-@dev_required
-def approve():
-    data = request.get_json() or {}
-    email = data.get('email')
-    # update in mongo if available
-    if db is not None and email:
-        try:
-            db['users'].update_many({"email":email}, {"$set":{"approved":True}})
-        except: pass
-    # update memory
-    for u in MEM['users']:
-        if u.get('email')==email: u['approved']=True
-    return jsonify({"ok":True})
-
-if __name__=='__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT',10000)))
+# ================== DN
