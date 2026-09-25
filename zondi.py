@@ -2,14 +2,15 @@ import os
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
 from datetime import datetime
+from functools import wraps
 
 app = Flask(__name__, static_folder='.')
-app.secret_key = 'zondi-final-2026-secure'
+app.secret_key = os.environ.get('SECRET_KEY', 'zondi-dev-only-change-in-prod')
 CORS(app, supports_credentials=True)
 
-DEV_PASS = 'zondi@123'
+DEV_PASS = os.environ.get('DEV_PASS', 'zondi@123')
 
-# Mongo safe - won't crash
+# Mongo safe
 try:
     from pymongo import MongoClient
     MONGO_URI = os.environ.get('MONGO_URI','')
@@ -24,7 +25,6 @@ except Exception as e:
     print(f"Mongo failed: {e}")
     db = None
 
-# memory fallback if no DB
 MEM = {"locs":[], "sos":[], "dnw":[], "radio":[], "users":[]}
 
 def save(col, data):
@@ -44,6 +44,14 @@ def get(col):
         except: pass
     return MEM.get(col, [])[::-1]
 
+def dev_required(f):
+    @wraps(f)
+    def wrap(*args, **kwargs):
+        if not session.get('dev_auth'):
+            return jsonify({"ok":False, "error":"Not authorized"}),403
+        return f(*args, **kwargs)
+    return wrap
+
 @app.route('/')
 def home(): return send_from_directory('.', 'login.html')
 
@@ -51,7 +59,6 @@ def home(): return send_from_directory('.', 'login.html')
 def serve(filename):
     return send_from_directory('.', filename)
 
-# AUTH
 @app.route('/api/dev/login', methods=['POST'])
 def dev_login():
     pwd = (request.get_json() or {}).get('password','').strip()
@@ -63,22 +70,21 @@ def dev_login():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data=request.get_json() or {}
-    user={"email":data.get('email','client@zondi.com'), "role":data.get('role','client'), "approved":True}
+    user={"email":data.get('email','client@zondi.com'), "role":data.get('role','client'), "approved": False if data.get('role')=='patroller' else True}
     save('users', user)
     return jsonify({"ok":True,"user":user})
 
-# LIVE LOCATION - CLIENT MOVES IT SHOWS
 @app.route('/api/location/update', methods=['POST'])
 def loc_update():
     data=request.get_json() or {}
-    save('locs', data) # {email, lat, lng, role}
+    if not data.get('email') or not data.get('lat'):
+        return jsonify({"ok":False}),400
+    save('locs', data)
     return jsonify({"ok":True})
 
 @app.route('/api/location/live')
-def loc_live():
-    return jsonify(get('locs'))
+def loc_live(): return jsonify(get('locs'))
 
-# SOS
 @app.route('/api/sos', methods=['POST'])
 def sos():
     save('sos', request.get_json() or {})
@@ -87,7 +93,6 @@ def sos():
 @app.route('/api/sos/live')
 def sos_live(): return jsonify(get('sos'))
 
-# DNW PB708
 @app.route('/api/dnw/register', methods=['POST'])
 def dnw_reg():
     save('dnw', request.get_json() or {})
@@ -101,24 +106,31 @@ def dnw_scan():
 @app.route('/api/dnw/live')
 def dnw_live(): return jsonify(get('dnw'))
 
-# RADIO FEATURE - Walkie talkie
 @app.route('/api/radio/send', methods=['POST'])
 def radio_send():
-    data=request.get_json() or {}
-    # {from, to, audioBase64, lat, lng}
-    save('radio', data)
+    save('radio', request.get_json() or {})
     return jsonify({"ok":True})
 
 @app.route('/api/radio/live')
 def radio_live(): return jsonify(get('radio'))
 
-# DEV - Approve patrollers
 @app.route('/api/users/list')
+@dev_required
 def users_list(): return jsonify(get('users'))
 
 @app.route('/api/users/approve', methods=['POST'])
+@dev_required
 def approve():
-    if not session.get('dev_auth'): return jsonify({"ok":False}),403
+    data = request.get_json() or {}
+    email = data.get('email')
+    # update in mongo if available
+    if db is not None and email:
+        try:
+            db['users'].update_many({"email":email}, {"$set":{"approved":True}})
+        except: pass
+    # update memory
+    for u in MEM['users']:
+        if u.get('email')==email: u['approved']=True
     return jsonify({"ok":True})
 
 if __name__=='__main__':
