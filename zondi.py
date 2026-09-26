@@ -109,6 +109,7 @@ FILES = {
     "patrollers": os.path.join(DATA_DIR, "patrollers_live.json"),
     "radio": os.path.join(DATA_DIR, "radio_talk.json"),
     "scans": os.path.join(DATA_DIR, "scans.json"),
+    "password_resets": os.path.join(DATA_DIR, "password_resets.json"),
 }
 
 file_lock = threading.RLock()
@@ -251,6 +252,8 @@ def require_dev(f):
 # -----------------------------------------------------------------------------
 @app.route("/")
 def home():
+    if os.path.exists(os.path.join(BASE_DIR, "index.html")):
+        return send_from_directory(BASE_DIR, "index.html")
     if os.path.exists(os.path.join(BASE_DIR, "login.html")):
         return send_from_directory(BASE_DIR, "login.html")
     return jsonify({"name": "Zondi", "status": "running"})
@@ -261,6 +264,8 @@ PAGE_ALIASES = {
     "/login.html": "login.html",
     "/register": "register.html",
     "/register.html": "register.html",
+    "/forgot-password": "forgot-password.html",
+    "/forgot-password.html": "forgot-password.html",
     "/clients": "clients.html",
     "/clients.html": "clients.html",
     "/patrol": "patrol.html",
@@ -279,7 +284,7 @@ def health():
     return jsonify({"ok": True, "service": "zondi", "time": iso_now()})
 
 
-@app.route("<path:path>")
+@app.route("/<path:path>")
 def static_pages(path):
     route = "/" + path
     filename = PAGE_ALIASES.get(route)
@@ -305,8 +310,8 @@ def api_register():
         return jsonify({"ok": False, "error": "Public registration supports client or patroller only"}), 400
     if not email or not password:
         return jsonify({"ok": False, "error": "Email and password required"}), 400
-    if len(password) < 6:
-        return jsonify({"ok": False, "error": "Password must be at least 6 characters"}), 400
+    if len(password) < 8:
+        return jsonify({"ok": False, "error": "Password must be at least 8 characters"}), 400
     if find_user(email):
         return jsonify({"ok": False, "error": "Email already registered"}), 409
 
@@ -472,6 +477,76 @@ def admin_approve():
     save_json(FILES["users"], users)
     return jsonify({"ok": True, "action": action, "email": email})
 
+
+
+# -----------------------------------------------------------------------------
+# PASSWORD RECOVERY
+# -----------------------------------------------------------------------------
+@app.route("/api/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+
+    # Always return the same public response to avoid account enumeration.
+    generic = {
+        "ok": True,
+        "message": "If that email is registered, a protected password-reset request has been created for Developer/Admin review."
+    }
+    if not email or "@" not in email:
+        return jsonify(generic), 200
+
+    user = find_user(email)
+    if not user:
+        return jsonify(generic), 200
+
+    requests = load_json(FILES["password_resets"])
+    requests = [x for x in requests if not (x.get("email") == email and x.get("status") == "pending")]
+    requests.append({
+        "id": str(uuid.uuid4()),
+        "email": email,
+        "user_id": user.get("id"),
+        "requested_at": iso_now(),
+        "status": "pending",
+    })
+    save_json(FILES["password_resets"], requests[-500:])
+    return jsonify(generic), 200
+
+
+@app.route("/api/admin/password-reset-requests")
+@require_dev
+def admin_password_reset_requests():
+    requests = load_json(FILES["password_resets"])
+    return jsonify({"ok": True, "requests": [x for x in requests if x.get("status") == "pending"][-100:]})
+
+
+@app.route("/api/admin/password-reset", methods=["POST"])
+@require_dev
+def admin_password_reset():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+    if not email or len(password) < 8:
+        return jsonify({"ok": False, "error": "Email and a password of at least 8 characters are required"}), 400
+
+    users = load_json(FILES["users"])
+    found = next((u for u in users if u.get("email", "").lower() == email), None)
+    if not found:
+        return jsonify({"ok": False, "error": "Account not found"}), 404
+
+    found["password"] = generate_password_hash(password)
+    for index, item in enumerate(users):
+        if item.get("id") == found.get("id"):
+            users[index] = found
+            break
+    save_json(FILES["users"], users)
+
+    requests = load_json(FILES["password_resets"])
+    for item in requests:
+        if item.get("email") == email and item.get("status") == "pending":
+            item["status"] = "completed"
+            item["completed_at"] = iso_now()
+    save_json(FILES["password_resets"], requests[-500:])
+    return jsonify({"ok": True, "email": email})
 
 # -----------------------------------------------------------------------------
 # CLIENT LIVE LOCATION
