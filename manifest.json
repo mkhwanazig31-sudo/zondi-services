@@ -1,8 +1,4 @@
 {
-  "name": "Zondi",
-  "short_name": "Zondi",
-  "start_url": "/login",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#111111"
+"name":"Zondi Security Response","short_name":"Zondi","start_url":"/","display":"standalone",
+"background_color":"#070707","theme_color":"#d7a94a","icons":[]
 }
