@@ -24,7 +24,7 @@ $('devToggle').onclick=()=>{$('devForm').classList.toggle('hidden');$('devPass')
 $('login').onsubmit=async e=>{e.preventDefault();$('loginBtn').disabled=true;$('loginBtn').textContent='Signing in…';try{
 const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({email:$('email').value.trim(),password:$('password').value})});
 let d={};try{d=await r.json()}catch{throw Error('Server returned an invalid response.')};if(!r.ok||!d.ok)throw Error(d.error||'Login failed');
-saveSession(d);location.href=d.user.role==='patroller'?'/patrol':'/clients';
+saveSession(d);location.href='/dashboard';
 }catch(e){msg(e.message,'err')}finally{$('loginBtn').disabled=false;$('loginBtn').textContent='Sign in'}};
 $('devForm').onsubmit=async e=>{e.preventDefault();$('devBtn').disabled=true;$('devBtn').textContent='Checking…';try{
 const r=await fetch('/api/dev-login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({password:$('devPass').value})});
