@@ -1,3 +1,0 @@
-npx create-expo-app@latest zondi-protect
-cd zondi-protect
-npx expo install expo-location expo-task-manager expo-secure-store expo-linking expo-intent-launcher expo-image expo-status-bar
