@@ -264,6 +264,8 @@ PAGE_ALIASES = {
     "/login.html": "login.html",
     "/register": "register.html",
     "/register.html": "register.html",
+    "/dashboard": "dashboard.html",
+    "/dashboard.html": "dashboard.html",
     "/forgot-password": "forgot-password.html",
     "/forgot-password.html": "forgot-password.html",
     "/clients": "clients.html",
