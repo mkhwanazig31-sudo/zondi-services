@@ -265,8 +265,6 @@ PAGE_ALIASES = {
     "/clients.html": "clients.html",
     "/patrol": "patrol.html",
     "/patrol.html": "patrol.html",
-    "/patrollers": "patrollers.html",
-    "/patrollers.html": "patrollers.html",
     "/admin": "dev_portal.html",
     "/admin.html": "dev_portal.html",
     "/dev": "dev_portal.html",
