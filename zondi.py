@@ -72,6 +72,7 @@ socketio = SocketIO(
 
 DEV_TOKEN_MAX_AGE = 8 * 60 * 60
 USER_TOKEN_MAX_AGE = 12 * 60 * 60
+CLIENT_LIVE_WINDOW_SECONDS = int(os.environ.get("CLIENT_LIVE_WINDOW_SECONDS", "120"))
 
 
 def now_utc():
@@ -610,15 +611,26 @@ def location_update(user):
 @app.route("/api/location/live")
 @require_patroller
 def location_live(user):
+    # Return the most recent stored coordinate for every client. A stale
+    # client stays visible on the Patrol map as LAST SEEN instead of disappearing.
     locations = load_json(FILES["locations"])
-    cutoff = now_utc() - timedelta(minutes=10)
+    cutoff = now_utc() - timedelta(seconds=CLIENT_LIVE_WINDOW_SECONDS)
     latest = []
+
     for record in locations:
         if record.get("role") != "client":
             continue
+
         timestamp = parse_time(record.get("time"))
-        if timestamp and timestamp >= cutoff:
-            latest.append(record)
+        if not timestamp:
+            continue
+
+        item = dict(record)
+        item["last_seen"] = record.get("time")
+        item["live"] = timestamp >= cutoff
+        latest.append(item)
+
+    latest.sort(key=lambda x: x.get("last_seen", ""), reverse=True)
     return jsonify(latest)
 
 
