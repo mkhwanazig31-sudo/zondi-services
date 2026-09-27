@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zondi — Developer Portal</title><link rel="stylesheet" href="/assets/zondi-theme.css"></head><body>
+<header class="topbar"><div class="topbar-inner"><a class="brand" href="/"><span class="brand-mark"><img src="/assets/zondi-logo.png" alt=""></span><span><div class="brand-title">ZONDI</div><div class="brand-sub">DEVELOPER / ADMIN</div></span></a><button class="btn red" id="logout">Sign out</button></div></header>
+<main class="shell"><div id="status" class="status hidden"></div>
+<section class="panel panel-pad"><div class="row-between"><div><b style="font-size:20px">Operations</b><div class="mini">Approve patrol access and handle protected account recovery.</div></div><span class="badge gold">PRIVATE</span></div>
+<div class="stat-grid" style="margin-top:14px"><div class="stat"><div class="n" id="pending">—</div><div class="l">Pending patrollers</div></div><div class="stat"><div class="n" id="approved">—</div><div class="l">Approved</div></div><div class="stat"><div class="n" id="total">—</div><div class="l">Total patrollers</div></div></div></section>
+<section class="grid12" style="margin-top:14px"><div class="panel panel-pad span8"><div class="row-between"><div><b>Patroller management</b><div class="mini">Approve, reject or revoke patrol access.</div></div><button class="btn" id="refresh">Refresh</button></div><div id="list" class="list" style="margin-top:12px"></div></div>
+<div class="panel panel-pad span4"><b>Forgot-password requests</b><div class="mini" style="margin-top:5px">Requests are processed here without revealing public account status.</div><div id="resetList" class="list" style="margin-top:12px"></div></div></section>
+<section class="panel panel-pad" style="margin-top:14px"><div class="notice">Developer password is never displayed here. Keep DEV_PORTAL_PASSWORD configured only in Render Environment Variables.</div></section>
+<footer class="footer">ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span></footer></main>
+<script>
+const token=sessionStorage.getItem('zondi_dev_token');if(!token)location.href='/login?dev=1';const $=id=>document.getElementById(id),auth=()=>({Authorization:'Bearer '+token});function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function msg(t,c=''){let s=$('status');s.hidden=false;s.textContent=t;s.className='status '+c}
+async function load(){try{let r=await fetch('/api/admin/pending',{headers:auth()});let d=await r.json();if(r.status===401)throw Error('Developer session expired');if(!r.ok)throw Error(d.error||'Unable to load');let all=d.all_patrollers||[];$('pending').textContent=(d.pending||[]).length;$('approved').textContent=all.filter(x=>x.status==='approved').length;$('total').textContent=all.length;$('list').innerHTML=all.length?all.map(u=>`<div class="item"><div class="row" style="justify-content:space-between"><div><b>${esc(u.name||u.email)}</b><div class="sub">${esc(u.email)} · ${esc(u.phone||'No phone')}</div></div><span class="pill">${esc(u.status)}</span></div><div class="row" style="margin-top:9px">${u.status!=='approved'?`<button class="btn green" data-a="approve" data-e="${esc(u.email)}">Approve</button>`:''}${u.status==='pending'?`<button class="btn red" data-a="reject" data-e="${esc(u.email)}">Reject</button>`:''}${u.status==='approved'?`<button class="btn" data-a="revoke" data-e="${esc(u.email)}">Revoke</button>`:''}</div></div>`).join(''):'<div class="empty">No patrollers registered.</div>';document.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{let r=await fetch('/api/admin/approve',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({email:b.dataset.e,action:b.dataset.a})});let d=await r.json();if(!r.ok||!d.ok)msg(d.error||'Action failed','err');else load()})}catch(e){msg(e.message,'err')}}$('refresh').onclick=load;$('logout').onclick=async()=>{try{await fetch('/api/dev-logout',{method:'POST',headers:auth()})}catch{}sessionStorage.removeItem('zondi_dev_token');location.href='/login'};load();setInterval(load,30000);
+</script>
+<script>
+async function loadResetRequests(){
+try{
+const r=await fetch('/api/admin/password-reset-requests',{headers:auth()});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Unable to load reset requests');
+const items=d.requests||[];$('resetList').innerHTML=items.length?items.map(x=>`<div class="item"><b>${esc(x.email)}</b><div class="mini">${esc(x.requested_at||'')} · ${esc(x.status||'pending')}</div><button class="btn primary" style="margin-top:8px;width:100%" data-reset="${esc(x.email)}">Set new password</button></div>`).join(''):'<div class="empty">No pending reset requests.</div>';
+document.querySelectorAll('[data-reset]').forEach(b=>b.onclick=async()=>{
+const email=b.dataset.reset;const password=prompt('Enter a new temporary password (8+ characters) for '+email);if(password===null)return;
+if(password.length<8){msg('Password must be at least 8 characters.','err');return}
+const r=await fetch('/api/admin/password-reset',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({email,password})});const d=await r.json();
+if(!r.ok||!d.ok)msg(d.error||'Reset failed','err');else{msg('Password reset completed for '+email,'ok');loadResetRequests()}
+})
+}catch(e){msg(e.message,'err')}
+}
+loadResetRequests();setInterval(loadResetRequests,30000);
+</script></body></html>
