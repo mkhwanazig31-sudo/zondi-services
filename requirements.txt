@@ -1,6 +1,9 @@
-flask
-flask-cors
-flask-socketio
-eventlet
-itsdangerous
-gunicorn
+flask>=3.1,<4
+flask-cors>=6,<7
+flask-socketio>=5.3,<6
+eventlet>=0.40,<1
+itsdangerous>=2.2,<3
+werkzeug>=3.1,<4
+gunicorn>=23,<24
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
