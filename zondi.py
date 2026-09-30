@@ -1,4 +1,4 @@
-"""Zondi backend v4
+"""Zondi backend v5
 
 Production-oriented Flask + Socket.IO backend for the Zondi platform.
 
@@ -24,12 +24,15 @@ Install:
   pip install -r requirements.txt
 
 Run locally:
-  python zondi_v4.py
+  python zondi_v5.py
 """
 
 import os
 import threading
 import uuid
+
+from sqlalchemy import JSON, DateTime, Integer, String, UniqueConstraint, create_engine, delete, select, update
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -96,24 +99,71 @@ def parse_time(value):
 
 
 # -----------------------------------------------------------------------------
-# FILE STORAGE
+# DATABASE STORAGE
 # -----------------------------------------------------------------------------
-# This keeps the current deployment simple. For multiple Render instances,
-# move these collections to MongoDB/PostgreSQL because local disk is ephemeral.
-DATA_DIR = os.environ.get("ZONDI_DATA_DIR", BASE_DIR)
-os.makedirs(DATA_DIR, exist_ok=True)
+# Production: set DATABASE_URL to a managed PostgreSQL connection string.
+# Development: if DATABASE_URL is absent, a local SQLite database is used.
+# JSON remains the API format; it is no longer used as Zondi's persistent DB.
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgres://"):]
+elif DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://"):]
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///zondi_dev.db"
 
-FILES = {
-    "users": os.path.join(DATA_DIR, "users.json"),
-    "locations": os.path.join(DATA_DIR, "locations.json"),
-    "sos": os.path.join(DATA_DIR, "sos_feed.json"),
-    "patrollers": os.path.join(DATA_DIR, "patrollers_live.json"),
-    "radio": os.path.join(DATA_DIR, "radio_talk.json"),
-    "scans": os.path.join(DATA_DIR, "scans.json"),
-    "password_resets": os.path.join(DATA_DIR, "password_resets.json"),
+engine_kwargs = {"pool_pre_ping": True}
+if DATABASE_URL.startswith("postgresql+"):
+    engine_kwargs.update({"pool_size": int(os.environ.get("DB_POOL_SIZE", "10")), "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "20"))})
+else:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class ZondiRecord(Base):
+    __tablename__ = "zondi_records"
+    __table_args__ = (UniqueConstraint("collection", "record_key", name="uq_zondi_collection_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    collection: Mapped[str] = mapped_column(String(80), index=True)
+    record_key: Mapped[str] = mapped_column(String(255), default="", index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+COLLECTIONS = {
+    "users": "users",
+    "locations": "locations_history",
+    "sos": "sos",
+    "patrollers": "patrollers_latest",
+    "radio": "radio",
+    "scans": "scans",
+    "password_resets": "password_resets",
 }
 
-file_lock = threading.RLock()
+# Used by the route layer for atomic latest-location writes.
+LATEST_LOCATION_COLLECTION = "locations_latest"
+LATEST_PATROLLER_COLLECTION = "patrollers_latest"
+
+# Legacy path aliases retained so existing route code and older integrations
+# continue to work; these are logical names only, not on-disk database files.
+FILES = {
+    "users": "users.json",
+    "locations": "locations.json",
+    "sos": "sos_feed.json",
+    "patrollers": "patrollers_live.json",
+    "radio": "radio_talk.json",
+    "scans": "scans.json",
+    "password_resets": "password_resets.json",
+}
+
+db_lock = threading.RLock()
 channel_lock = threading.RLock()
 
 # channel -> {sid, email, started_at}
@@ -122,33 +172,108 @@ active_talkers = {}
 socket_channels = {}
 
 
+def db_init():
+    Base.metadata.create_all(engine)
+
+
+def _collection_for_path(path):
+    name = os.path.basename(str(path))
+    return {
+        "users.json": "users",
+        "locations.json": "locations_history",
+        "sos_feed.json": "sos",
+        "patrollers_live.json": "patrollers_latest",
+        "radio_talk.json": "radio",
+        "scans.json": "scans",
+        "password_resets.json": "password_resets",
+    }.get(name, name.rsplit(".", 1)[0])
+
+
+def load_collection(collection):
+    with db_lock, Session(engine) as db:
+        rows = db.scalars(
+            select(ZondiRecord)
+            .where(ZondiRecord.collection == collection)
+            .order_by(ZondiRecord.created_at.asc(), ZondiRecord.id.asc())
+        ).all()
+        return [dict(row.payload or {}) for row in rows]
+
+
 def load_json(path):
-    with file_lock:
-        if not os.path.exists(path):
-            return []
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                value = __import__("json").load(fh)
-            return value if isinstance(value, list) else []
-        except (OSError, ValueError):
-            return []
+    return load_collection(_collection_for_path(path))
+
+
+def save_collection(collection, data):
+    # Compatibility helper for low-frequency collections. High-frequency
+    # location updates use atomic upserts below instead of replacing a table.
+    now = now_utc()
+    with db_lock, Session(engine) as db:
+        db.execute(delete(ZondiRecord).where(ZondiRecord.collection == collection))
+        for item in data:
+            payload = dict(item or {})
+            key = str(payload.get("id") or uuid.uuid4())
+            db.add(ZondiRecord(collection=collection, record_key=key, payload=payload, created_at=now, updated_at=now))
+        db.commit()
 
 
 def save_json(path, data):
-    import json
+    save_collection(_collection_for_path(path), data)
 
-    tmp = f"{path}.tmp"
-    with file_lock:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
+
+def upsert_record(collection, key, payload):
+    now = now_utc()
+    key = str(key)
+    with db_lock, Session(engine) as db:
+        row = db.scalar(
+            select(ZondiRecord).where(
+                ZondiRecord.collection == collection,
+                ZondiRecord.record_key == key,
+            )
+        )
+        if row:
+            row.payload = dict(payload)
+            row.updated_at = now
+        else:
+            db.add(ZondiRecord(collection=collection, record_key=key, payload=dict(payload), created_at=now, updated_at=now))
+        db.commit()
+
+
+def append_record(collection, payload, max_rows=None):
+    now = now_utc()
+    key = str(payload.get("id") or uuid.uuid4())
+    with db_lock, Session(engine) as db:
+        db.add(ZondiRecord(collection=collection, record_key=key, payload=dict(payload), created_at=now, updated_at=now))
+        db.commit()
+        if max_rows:
+            ids = db.scalars(
+                select(ZondiRecord.id)
+                .where(ZondiRecord.collection == collection)
+                .order_by(ZondiRecord.created_at.desc(), ZondiRecord.id.desc())
+                .offset(max_rows)
+            ).all()
+            if ids:
+                db.execute(delete(ZondiRecord).where(ZondiRecord.id.in_(ids)))
+                db.commit()
+
+
+def get_record(collection, key):
+    with db_lock, Session(engine) as db:
+        row = db.scalar(select(ZondiRecord).where(ZondiRecord.collection == collection, ZondiRecord.record_key == str(key)))
+        return dict(row.payload or {}) if row else None
+
+
+def delete_record(collection, key):
+    with db_lock, Session(engine) as db:
+        db.execute(delete(ZondiRecord).where(ZondiRecord.collection == collection, ZondiRecord.record_key == str(key)))
+        db.commit()
 
 
 def init_files():
-    for path in FILES.values():
-        if not os.path.exists(path):
-            save_json(path, [])
+    # Kept as a compatibility name so older startup scripts do not break.
+    db_init()
 
+
+db_init()
 
 # -----------------------------------------------------------------------------
 # AUTH HELPERS
@@ -161,8 +286,7 @@ def find_user(email):
     email = (email or "").strip().lower()
     if not email:
         return None
-    users = load_json(FILES["users"])
-    return next((u for u in users if u.get("email", "").lower() == email), None)
+    return get_record("users", email)
 
 
 def create_token(scope, subject, max_age):
@@ -328,9 +452,7 @@ def api_register():
         "status": "approved" if role == "client" else "pending",
         "created_at": iso_now(),
     }
-    users = load_json(FILES["users"])
-    users.append(user)
-    save_json(FILES["users"], users)
+    upsert_record("users", user["email"], user)
 
     return jsonify({
         "ok": True,
@@ -359,12 +481,7 @@ def api_login():
     # Legacy plain-text migration support; replace it immediately with a hash.
     if not valid and stored == password and password:
         user["password"] = generate_password_hash(password)
-        users = load_json(FILES["users"])
-        for index, item in enumerate(users):
-            if item.get("id") == user.get("id"):
-                users[index] = user
-                break
-        save_json(FILES["users"], users)
+        upsert_record("users", user.get("email"), user)
         valid = True
 
     if not valid:
@@ -467,17 +584,11 @@ def admin_approve():
     if action not in {"approve", "reject", "revoke"}:
         return jsonify({"ok": False, "error": "Invalid action"}), 400
 
-    users = load_json(FILES["users"])
-    found = False
-    for user in users:
-        if user.get("email", "").lower() == email and user.get("role") == "patroller":
-            user["status"] = {"approve": "approved", "reject": "rejected", "revoke": "pending"}[action]
-            found = True
-            break
-    if not found:
+    user = find_user(email)
+    if not user or user.get("role") != "patroller":
         return jsonify({"ok": False, "error": "Patroller not found"}), 404
-
-    save_json(FILES["users"], users)
+    user["status"] = {"approve": "approved", "reject": "rejected", "revoke": "pending"}[action]
+    upsert_record("users", email, user)
     return jsonify({"ok": True, "action": action, "email": email})
 
 
@@ -531,17 +642,12 @@ def admin_password_reset():
     if not email or len(password) < 8:
         return jsonify({"ok": False, "error": "Email and a password of at least 8 characters are required"}), 400
 
-    users = load_json(FILES["users"])
-    found = next((u for u in users if u.get("email", "").lower() == email), None)
+    found = find_user(email)
     if not found:
         return jsonify({"ok": False, "error": "Account not found"}), 404
 
     found["password"] = generate_password_hash(password)
-    for index, item in enumerate(users):
-        if item.get("id") == found.get("id"):
-            users[index] = found
-            break
-    save_json(FILES["users"], users)
+    upsert_record("users", email, found)
 
     requests = load_json(FILES["password_resets"])
     for item in requests:
@@ -592,12 +698,10 @@ def location_update(user):
         "time": iso_now(),
     }
 
-    locations = load_json(FILES["locations"])
-    locations = [x for x in locations if x.get("user_id") != subject_id]
-    locations.append(record)
-    # Keep bounded history for simple file storage.
-    locations = locations[-2000:]
-    save_json(FILES["locations"], locations)
+    # Atomic latest-location record: concurrent phones do not overwrite each
+    # other's data. A separate history row is retained for auditing/history.
+    upsert_record(LATEST_LOCATION_COLLECTION, subject_id, record)
+    append_record("locations_history", record, max_rows=10000)
 
     # Patrol portal receives live client movement.
     if user.get("role") == "client":
@@ -613,7 +717,7 @@ def location_update(user):
 def location_live(user):
     # Return the most recent stored coordinate for every client. A stale
     # client stays visible on the Patrol map as LAST SEEN instead of disappearing.
-    locations = load_json(FILES["locations"])
+    locations = load_collection(LATEST_LOCATION_COLLECTION)
     cutoff = now_utc() - timedelta(seconds=CLIENT_LIVE_WINDOW_SECONDS)
     latest = []
 
@@ -643,7 +747,7 @@ def location_history(user, user_id):
     if user.get("role") not in {"client", "patroller"}:
         return jsonify({"ok": False, "error": "Forbidden"}), 403
 
-    records = [x for x in load_json(FILES["locations"]) if x.get("user_id") == user_id]
+    records = [x for x in load_collection("locations_history") if x.get("user_id") == user_id]
     return jsonify(records[-100:])
 
 
@@ -729,9 +833,7 @@ def patroller_ping(user):
         "lng": coords[1],
         "time": iso_now(),
     }
-    records = [x for x in load_json(FILES["patrollers"]) if x.get("id") != user.get("id")]
-    records.append(record)
-    save_json(FILES["patrollers"], records[-500:])
+    upsert_record(LATEST_PATROLLER_COLLECTION, user.get("id"), record)
     socketio.emit("patroller_update", record, room="patrollers_room")
     return jsonify({"ok": True, "patroller": record})
 
@@ -769,9 +871,7 @@ def create_scan(user):
         "lng": data.get("lng"),
         "note": str(data.get("note", "")).strip(),
     }
-    scans = load_json(FILES["scans"])
-    scans.append(record)
-    save_json(FILES["scans"], scans[-2000:])
+    append_record("scans", record, max_rows=2000)
     return jsonify({"ok": True, "scan": record})
 
 
@@ -801,9 +901,7 @@ def radio_http(user):
             "message": message,
             "time": iso_now(),
         }
-        feed = load_json(FILES["radio"])
-        feed.append(record)
-        save_json(FILES["radio"], feed[-500:])
+        append_record("radio", record, max_rows=500)
         socketio.emit("text_message", record, room=f"channel_{channel}")
         return jsonify({"ok": True, "message": record})
 
@@ -955,6 +1053,19 @@ def handle_ptt_end(data):
     if released:
         emit("ptt_ended", {"channel": channel, "email": user.get("email")}, room=f"channel_{channel}")
         emit("ptt_released", {"channel": channel})
+
+
+# -----------------------------------------------------------------------------
+# HEALTH
+# -----------------------------------------------------------------------------
+@app.route("/api/health")
+def api_health():
+    try:
+        with Session(engine) as db:
+            db.execute(select(1))
+        return jsonify({"ok": True, "service": "zondi", "database": "connected"})
+    except Exception:
+        return jsonify({"ok": False, "service": "zondi", "database": "unavailable"}), 503
 
 
 # -----------------------------------------------------------------------------
