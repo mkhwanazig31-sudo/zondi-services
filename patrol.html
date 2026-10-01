@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Zondi — Patrol Portal</title><link rel="stylesheet" href="/assets/zondi-theme.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script></head><body>
+<header class="topbar"><div class="topbar-inner"><a class="brand" href="/patrol"><span class="brand-mark"><img src="/assets/zondi-logo.png" alt=""></span><span><div class="brand-title">ZONDI</div><div class="brand-sub">PATROL PORTAL · <span id="me">Patroller</span></div></span></a><div class="row"><span class="badge gold" id="conn">Offline</span><button class="btn" id="logout">Sign out</button></div></div></header>
+<main class="shell"><div class="quicknav" style="margin:8px 0 12px"><a class="btn" href="/patrol">🗺 Live Map</a><a class="btn" href="/radio">📻 Radio</a><a class="btn" href="/">🏠 Home</a></div>
+<div id="status" class="status hidden"></div><section class="grid12">
+<div class="panel panel-pad span8"><div class="row-between"><div><b>Live client tracking</b><div class="mini">Named client pins update without refreshing the page.</div></div><span class="badge live">● LIVE MAP</span></div><div style="height:12px"></div><div id="map" class="map"></div><div class="row" style="margin-top:10px"><button class="btn" id="fit">⌗ Fit clients</button><button class="btn" id="locate">📍 My location</button><button class="btn green" id="share">Start patrol location</button></div></div>
+<div class="panel panel-pad span4"><div class="row-between"><div><b>Active clients</b><div class="mini">Current client visibility</div></div><span class="badge live">LIVE</span></div><div id="clients" class="list" style="margin-top:10px"></div></div>
+<div class="panel panel-pad span6"><div class="row-between"><div><b>🚨 Active SOS</b><div class="mini">Respond and resolve emergency events.</div></div><span class="badge gold">PRIORITY</span></div><div id="sos" class="list" style="margin-top:10px"></div></div>
+<div class="panel panel-pad span6"><div class="row-between"><div><b>📻 PTT Radio</b><div class="mini">Hold to talk on the selected channel.</div></div><a class="link mini" href="/radio">Open full radio</a></div><div class="row" style="margin-top:10px"><select id="channel" style="background:#0b0b09;color:#fff;border:1px solid var(--line);padding:10px;border-radius:11px"><option>1</option><option>2</option><option>3</option><option>4</option></select><span class="badge gold" id="radioStatus">Ready</span></div><button id="ptt" class="btn primary block" style="margin-top:11px;padding:19px">HOLD TO TALK</button><div id="radioFeed" class="list" style="margin-top:10px"></div></div>
+</section><footer class="footer">ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span></footer></main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/assets/zondi-radio.js"></script><script>
+
+const token=sessionStorage.getItem('zondi_token'),me=JSON.parse(sessionStorage.getItem('zondi_user')||'null');if(!token||!me||me.role!=='patroller')location.href='/login';
+const $=id=>document.getElementById(id),auth=()=>({Authorization:'Bearer '+token});function msg(t,c=''){let s=$('status');s.hidden=false;s.textContent=t;s.className='status '+c}
+$('me').textContent=me.name||me.email;
+const map=L.map('map').setView([-25.7479,28.2293],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+const clientMarkers=new Map(),clientData=new Map(),patrollerMarkers=new Map();let selfMarker=null;
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function isClientLive(x){
+  if(typeof x.live==='boolean')return x.live;
+  const t=Date.parse(x.last_seen||x.time||'');
+  return Number.isFinite(t) && (Date.now()-t)<=120000;
+}
+function lastSeenText(x){
+  const t=Date.parse(x.last_seen||x.time||'');
+  if(!Number.isFinite(t))return 'Last seen: unknown';
+  const age=Math.max(0,Date.now()-t);
+  if(age<15000)return 'Live now';
+  const mins=Math.floor(age/60000);
+  if(mins<1)return 'Last seen moments ago';
+  if(mins<60)return 'Last seen '+mins+' min ago';
+  return 'Last seen '+new Date(t).toLocaleString();
+}
+function markerLabel(x){
+  const live=isClientLive(x);
+  return `<b>${esc(x.name||x.email||'Client')}</b><br><span>${esc(x.email||'')}</span><br><span style="color:${live?'#86efac':'#f0c96c'}">${live?'🟢 LIVE':'⚪ LAST SEEN'} · ${esc(lastSeenText(x))}</span>`;
+}
+function upsertClient(x){
+  if(x.lat==null||x.lng==null||!x.user_id)return;
+  clientData.set(String(x.user_id),x);
+  let m=clientMarkers.get(String(x.user_id));
+  if(!m){
+    m=L.marker([x.lat,x.lng]).addTo(map);
+    clientMarkers.set(String(x.user_id),m);
+  }else{
+    const current=m.getLatLng();
+    if(Math.abs(current.lat-Number(x.lat))>0.000001 || Math.abs(current.lng-Number(x.lng))>0.000001){
+      m.setLatLng([x.lat,x.lng]);
+    }
+  }
+  m.bindPopup(markerLabel(x));
+  renderClients();
+}
+function refreshClientStates(){
+  clientData.forEach((x,id)=>{
+    const m=clientMarkers.get(id);
+    if(m)m.bindPopup(markerLabel(x));
+  });
+  renderClients();
+}
+function upsertPatroller(x){
+  if(x.lat==null||x.lng==null)return;
+  let m=patrollerMarkers.get(x.id);
+  if(!m){m=L.circleMarker([x.lat,x.lng],{radius:8}).addTo(map);patrollerMarkers.set(x.id,m)}
+  else m.setLatLng([x.lat,x.lng]);
+  m.bindPopup(`<b>Patroller</b><br>${esc(x.name||x.email||'')}`);
+}
+function renderClients(){
+  const a=[...clientData.entries()];
+  $('clients').innerHTML=a.length?a.map(([id,x])=>{
+    const live=isClientLive(x);
+    return `<button class="item" style="text-align:left;color:#fff;width:100%" data-id="${esc(id)}">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <b>${esc(x.name||x.email||'Client')}</b>
+        <span class="badge ${live?'live':'gold'}">${live?'● LIVE':'LAST SEEN'}</span>
+      </div>
+      <div class="sub">${esc(x.email||'')}</div>
+      <div class="mini" style="margin-top:4px">${esc(lastSeenText(x))}</div>
+    </button>`;
+  }).join(''):'<div class="empty">No client locations have been recorded yet.</div>';
+  document.querySelectorAll('#clients [data-id]').forEach(b=>b.onclick=()=>{
+    const m=clientMarkers.get(b.dataset.id);
+    if(m){map.setView(m.getLatLng(),16);m.openPopup()}
+  });
+}
+async function load(){try{let [a,b,c]=await Promise.all([fetch('/api/location/live',{headers:auth()}),fetch('/api/patrollers-live',{headers:auth()}),fetch('/api/sos-feed',{headers:auth()})]);if(!a.ok)throw Error('Session expired');(await a.json()).forEach(upsertClient);(await b.json()).forEach(upsertPatroller);renderSOS(await c.json())}catch(e){msg(e.message,'err')}}
+function renderSOS(items){let active=items.filter(x=>x.status==='active').slice(-20).reverse();$('sos').innerHTML=active.length?active.map(x=>`<div class="item"><b>🚨 ${esc(x.name||x.email||'Client')}</b><div class="sub">${new Date(x.time).toLocaleString()}</div><button class="btn red" style="margin-top:7px" data-sos="${x.id}">Resolve</button></div>`).join(''):'<div class="empty">No active SOS events.</div>';document.querySelectorAll('[data-sos]').forEach(b=>b.onclick=async()=>{let r=await fetch('/api/sos/'+b.dataset.sos+'/resolve',{method:'POST',headers:auth()});if(r.ok)load()})}
+$('fit').onclick=()=>{let pts=[...clientMarkers.values()].map(m=>m.getLatLng());if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[30,30]})};$('locate').onclick=()=>navigator.geolocation?.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],16);if(selfMarker)selfMarker.setLatLng([p.coords.latitude,p.coords.longitude]);else selfMarker=L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:7}).addTo(map).bindPopup('You')});
+let watch=null;$('share').onclick=()=>{if(watch!==null){navigator.geolocation.clearWatch(watch);watch=null;$('share').textContent='Start patrol location';return}watch=navigator.geolocation?.watchPosition(async p=>{await fetch('/api/patroller-ping',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy,heading:p.coords.heading,speed:p.coords.speed})})});$('share').textContent='Stop patrol location'};
+const socket=io({auth:{token}});socket.on('connect',()=>{$('conn').textContent='Online';socket.emit('join_channel',{channel:$('channel').value,auth:{token}})});socket.on('disconnect',()=>{$('conn').textContent='Offline'});socket.on('client_location_update',upsertClient);socket.on('patroller_update',upsertPatroller);socket.on('new_sos',x=>{renderSOS([x]);load()});socket.on('sos_resolved',load);window.initZondiRadio({socket,token,user:me,statusElId:'radioStatus',feedElId:'radioFeed'});
+$('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',headers:auth()})}catch{}sessionStorage.clear();location.href='/login'};load();setInterval(load,15000);setInterval(refreshClientStates,5000);
+
+</script></body></html>
