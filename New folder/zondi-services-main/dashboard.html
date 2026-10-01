@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#070707">
+<title>Zondi — Dashboard</title>
+<link rel="stylesheet" href="/assets/zondi-theme.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/dashboard">
+      <span class="brand-mark"><img src="/assets/zondi-logo.png" alt="Zondi"></span>
+      <span>
+        <div class="brand-title">ZONDI</div>
+        <div class="brand-sub">SECURITY RESPONSE DASHBOARD</div>
+      </span>
+    </a>
+    <div class="row">
+      <span class="badge gold" id="roleBadge">Checking access…</span>
+      <button class="btn" id="logout">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+  <section class="panel panel-pad" style="margin-top:14px">
+    <div class="row-between">
+      <div>
+        <div class="mini">YOUR ZONDI SPACE</div>
+        <h1 style="margin:5px 0 0;font-size:clamp(28px,5vw,46px);letter-spacing:-.045em">
+          Welcome, <span class="gold" id="name">there</span>
+        </h1>
+        <p class="mini" style="margin-top:7px">Everything you need, in one place.</p>
+      </div>
+      <div class="badge live" id="connection">● SECURE SESSION</div>
+    </div>
+  </section>
+
+  <section class="grid12" style="margin-top:14px">
+    <a class="panel portal-card span4" id="clientCard" href="/clients">
+      <div class="portal-icon">📱</div>
+      <div class="portal-title">Client Portal</div>
+      <div class="portal-copy">Live location sharing, SOS and your personal Zondi protection tools.</div>
+    </a>
+
+    <a class="panel portal-card span4" id="patrolCard" href="/patrol">
+      <div class="portal-icon">🚓</div>
+      <div class="portal-title">Patrol Portal</div>
+      <div class="portal-copy">Live client map, emergency response and security radio for approved patrol users.</div>
+    </a>
+
+    <a class="panel portal-card span4" id="devCard" href="/dev" style="display:none">
+      <div class="portal-icon">🛠️</div>
+      <div class="portal-title">Developer Portal</div>
+      <div class="portal-copy">Private administration, approvals and protected account recovery.</div>
+    </a>
+  </section>
+
+  <section class="grid12" style="margin-top:14px">
+    <div class="panel panel-pad span6">
+      <div class="row-between">
+        <div><b>Quick actions</b><div class="mini">Jump straight to the thing you need.</div></div>
+        <span class="badge gold">FAST</span>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <a class="btn primary" href="/clients" id="quickClient">📱 Client tools</a>
+        <a class="btn green" href="/patrol" id="quickPatrol">🚓 Patrol tools</a>
+        <a class="btn red" href="/clients" id="quickSos">🚨 SOS</a>
+      </div>
+    </div>
+
+    <div class="panel panel-pad span6">
+      <div class="row-between">
+        <div><b>Account</b><div class="mini">Your current Zondi access.</div></div>
+        <span class="badge live">ACTIVE</span>
+      </div>
+      <div class="list" style="margin-top:12px">
+        <div class="item"><div class="mini">Name</div><b id="accountName">—</b></div>
+        <div class="item"><div class="mini">Email</div><b id="accountEmail">—</b></div>
+        <div class="item"><div class="mini">Role</div><b id="accountRole">—</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel panel-pad" style="margin-top:14px">
+    <div class="notice" id="roleMessage">Loading your dashboard…</div>
+  </section>
+
+  <footer class="footer">
+    ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span>
+  </footer>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const token = sessionStorage.getItem('zondi_token');
+const savedUser = JSON.parse(sessionStorage.getItem('zondi_user') || 'null');
+
+function showUser(user){
+  $('name').textContent = user.name || user.email || 'User';
+  $('accountName').textContent = user.name || 'Not supplied';
+  $('accountEmail').textContent = user.email || '—';
+  $('accountRole').textContent = String(user.role || '—').toUpperCase();
+  $('roleBadge').textContent = String(user.role || 'USER').toUpperCase();
+}
+
+function configureForRole(user){
+  if(user.role === 'client'){
+    $('patrolCard').style.display = 'none';
+    $('quickPatrol').style.display = 'none';
+    $('roleMessage').textContent =
+      'Client mode: start live location when patrol visibility is needed, or use SOS for an emergency.';
+  }else if(user.role === 'patroller'){
+    $('clientCard').style.display = 'none';
+    $('quickClient').style.display = 'none';
+    $('quickSos').href = '/patrol';
+    $('roleMessage').textContent =
+      'Patrol mode: use the live map for clients, monitor SOS events, and open the radio when you need PTT.';
+  }
+
+  if(sessionStorage.getItem('zondi_dev_token')){
+    $('devCard').style.display = '';
+  }
+}
+
+async function load(){
+  if(!token || !savedUser){
+    location.href='/login';
+    return;
+  }
+
+  showUser(savedUser);
+  configureForRole(savedUser);
+
+  try{
+    const r = await fetch('/api/me',{
+      headers:{Authorization:'Bearer ' + token},
+      credentials:'same-origin'
+    });
+    let d={};
+    try{d=await r.json()}catch{}
+    if(!r.ok || !d.ok) throw new Error(d.error || 'Session expired');
+
+    showUser(d.user);
+    sessionStorage.setItem('zondi_user',JSON.stringify(d.user));
+    configureForRole(d.user);
+    $('connection').textContent='● SECURE SESSION';
+  }catch{
+    sessionStorage.removeItem('zondi_token');
+    sessionStorage.removeItem('zondi_user');
+    $('connection').textContent='SESSION EXPIRED';
+    setTimeout(()=>location.href='/login',700);
+  }
+}
+
+$('logout').onclick=async()=>{
+  try{
+    await fetch('/api/logout',{
+      method:'POST',
+      credentials:'same-origin',
+      headers:token ? {Authorization:'Bearer ' + token}:{}
+    });
+  }catch{}
+  sessionStorage.clear();
+  location.href='/login';
+};
+
+load();
+</script>
+</body>
+</html>

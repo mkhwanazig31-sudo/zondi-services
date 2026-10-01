@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zondi — Client Portal</title><link rel="stylesheet" href="/assets/zondi-theme.css"></head><body>
+<header class="topbar"><div class="topbar-inner"><a class="brand" href="/"><span class="brand-mark"><img src="/assets/zondi-logo.png" alt=""></span><span><div class="brand-title">ZONDI</div><div class="brand-sub">CLIENT PORTAL</div></span></a><button class="btn" id="logout">Sign out</button></div></header>
+<main class="shell"><div class="quicknav"><a class="btn" href="/clients">🏠 Client Home</a><a class="btn" href="/">Zondi Home</a></div><div id="status" class="status hidden" style="margin-top:12px"></div>
+<section class="grid12" style="margin-top:12px"><div class="panel panel-pad span8"><div class="badge live">CONNECTED</div><h2 style="margin:12px 0 0;font-size:29px;letter-spacing:-.04em">Welcome, <span id="name">Client</span></h2><p class="mini" style="margin-top:7px">Your Zondi account is ready. Start location sharing only when you need patrol visibility.</p><div class="row" style="margin-top:17px"><button class="btn green" id="start">Start live location</button><button class="btn red" id="sos">🚨 Send SOS</button></div></div>
+<div class="panel panel-pad span4"><b>Location status</b><p class="mini" id="locStatus" style="margin-top:6px">Location sharing is off.</p><div class="notice" style="margin-top:11px">Your live location is visible to authorized patrol users while sharing is active.</div></div></section>
+<section class="panel panel-pad" style="margin-top:14px"><div class="row-between"><div><b>Need help fast?</b><div class="mini">Use SOS for an active emergency. For routine visibility, start live location.</div></div><span class="badge gold">ZONDI RESPONSE</span></div></section>
+<footer class="footer">ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span></footer></main>
+<script>
+const token=()=>sessionStorage.getItem('zondi_token');const user=()=>JSON.parse(sessionStorage.getItem('zondi_user')||'null');const $=id=>document.getElementById(id);let watch=null;let heartbeat=null;let lastSentAt=0;
+function auth(){return token()?{Authorization:'Bearer '+token()}:{}}function msg(t,c=''){let s=$('status');s.hidden=false;s.textContent=t;s.className='status '+c}
+if(!token()||!user()||user().role!=='client')location.href='/login';else $('name').textContent=user().name||user().email;
+async function sendLocation(coords){
+  const now=Date.now();
+  if(now-lastSentAt<8000)return;
+  lastSentAt=now;
+  const body={lat:coords.latitude,lng:coords.longitude,accuracy:coords.accuracy,heading:coords.heading,speed:coords.speed};
+  try{
+    const r=await fetch('/api/location/update',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok)throw Error();
+    $('locStatus').textContent='Live location active · '+new Date().toLocaleTimeString();
+  }catch{
+    $('locStatus').textContent='Location update failed — retrying…';
+  }
+}
+async function heartbeatLocation(){
+  if(!watch)return;
+  navigator.geolocation.getCurrentPosition(
+    p=>sendLocation(p.coords),
+    ()=>{},
+    {enableHighAccuracy:true,maximumAge:5000,timeout:10000}
+  );
+}
+$('start').onclick=()=>{
+  if(!navigator.geolocation)return msg('Location is not supported by this browser.','err');
+  if(watch!==null){
+    navigator.geolocation.clearWatch(watch);
+    watch=null;
+    if(heartbeat)clearInterval(heartbeat);
+    heartbeat=null;
+    $('start').textContent='Start live location';
+    $('locStatus').textContent='Location sharing is off.';
+    return;
+  }
+  watch=navigator.geolocation.watchPosition(
+    p=>sendLocation(p.coords),
+    ()=>msg('Location permission was denied or unavailable.','err'),
+    {enableHighAccuracy:true,maximumAge:3000,timeout:10000}
+  );
+  heartbeat=setInterval(heartbeatLocation,15000);
+  $('start').textContent='Stop live location';
+  $('locStatus').textContent='Requesting location…';
+};
+$('sos').onclick=async()=>{if(!confirm('Send an emergency SOS to the patrol network?'))return;navigator.geolocation.getCurrentPosition(async p=>sendSOS(p.coords),async()=>sendSOS(null));async function sendSOS(c){let body=c?{lat:c.latitude,lng:c.longitude}:{};try{let r=await fetch('/api/sos',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify(body)});let d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'SOS failed');msg('SOS sent to the patrol network.','warn')}catch(e){msg(e.message,'err')}}};
+$('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',headers:auth()})}catch{}sessionStorage.clear();location.href='/login'};
+</script></body></html>
