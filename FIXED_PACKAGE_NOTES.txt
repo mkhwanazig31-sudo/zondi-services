@@ -1,0 +1,27 @@
+ZONDI FIXED PACKAGE
+
+Base: zondi-services-main.zip supplied by the user.
+
+Key fixes in this package:
+- Preserved the original Zondi portals, routes, theme, and zondi-logo.png.
+- Aligned the backend entry point to zondi.py.
+- Fixed migrate_json_to_postgres.py so it imports zondi.py instead of the nonexistent zondi_v5 module.
+- Fixed Vercel's stale app.py target to zondi.py; Render remains the recommended realtime deployment target.
+- Added render.yaml with the Eventlet/Gunicorn start command for zondi.py.
+- Updated native App.js and build documentation to the current Render backend hostname.
+- Added assets/zondi-radio.js and upgraded the bundled Patrol/Radio PTT transport to WebRTC audio with Socket.IO control/signaling.
+- Removed the bundled UI's MediaRecorder/base64 audio-chunk transport.
+- Added server-side WebRTC peer discovery/signaling events and channel membership cleanup.
+- Kept DEV_PORTAL_PASSWORD server-side; no developer password is stored in this package.
+
+Validation completed:
+- Python syntax compilation passed for zondi.py and migrate_json_to_postgres.py.
+- Node syntax checks passed for the WebRTC JS and all inline HTML JavaScript blocks.
+- Required route/page/asset files are present.
+- Original zondi-logo.png remains 113,198 bytes.
+
+Runtime note:
+- Full Flask/Socket.IO runtime smoke tests were not executed in this sandbox because Flask and the other requirements are not installed here. Render will install them from requirements.txt.
+
+
+Vercel crash fix: when DATABASE_URL is absent, Vercel now uses /tmp/zondi_dev.db instead of attempting to write zondi_dev.db under the read-only /var/task deployment filesystem. For production persistence, configure DATABASE_URL to managed PostgreSQL.
