@@ -30,6 +30,18 @@ body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;
 .store-card{background:#111;border:1px solid #222;border-radius:14px;padding:12px}
 .store-card.blocked{opacity:.35;border-color:#331111}
 #scanner{width:100%;aspect-ratio:1;background:#000;border-radius:16px;border:1px solid #222;overflow:hidden;display:grid;place-items:center}
+/* RADIO NET NEW */
+.radio-net{background:#0f0f0f;border:1px solid #222;border-radius:14px;padding:12px;margin-bottom:12px}
+.net-head{display:flex;align-items:center;gap:8px;font-size:12px}
+.dot{width:10px;height:10px;border-radius:50%;background:#555}
+.dot.on{background:#00ff88;box-shadow:0 0 8px #00ff88}
+.badge-net{background:#FFC300;color:#000;padding:2px 8px;border-radius:20px;font-weight:900;font-size:11px}
+.radio-list{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.ru{background:#1c1c1c;border:1px solid #2a2a2a;padding:6px 10px;border-radius:30px;font-size:11px;display:flex;gap:6px;align-items:center}
+.ru.tx{border-color:#FFC300;box-shadow:0 0 10px #FFC30044;color:#FFC300}
+#waveCanvas{width:100%;height:70px;background:radial-gradient(#111,#000);border-radius:8px;margin:6px 0;display:block}
+.ptt{width:100%;min-height:140px;margin-top:10px;border-radius:24px;background:radial-gradient(#2a2a2a,#0a0a0a);border:2px solid #333;color:#FFC300;font-weight:900;font-size:20px}
+.ptt:active{background:#FFC300;color:#000;box-shadow:0 0 20px #FFC300}
 </style>
 </head><body>
 <div class="top"><span id="clock">ZONDI SECURE • ENC ON</span><span id="conn" class="badge">Offline</span></div>
@@ -55,10 +67,17 @@ body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;
 <div style="padding:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fit">⌗ Fit</button><button class="btn" id="locate">📍 Me</button><button class="btn" id="sat">🛰️ Satellite</button><button class="btn gold" id="share">Start location</button></div>
 <div id="map"></div><div id="clients" style="padding:12px"></div></div>
 
-<div class="view" id="radioView"><div class="view-head"><b>📻 YANTON Radio</b><span class="badge live" id="radioStatus">Ready</span><button class="btn" onclick="closeViews()">✕</button></div>
-<div style="padding:14px"><select id="channel" style="width:100%;background:#0b0b09;color:#fff;border:1px solid #2a2a2a;padding:12px;border-radius:12px"><option value="1">CH 1 — Alpha</option><option value="2">CH 2 — Response</option><option value="3">CH 3 — Command</option><option value="4">CH 4 — Private</option></select>
-<button id="ptt" style="width:100%;min-height:160px;margin-top:14px;border-radius:24px;background:radial-gradient(#2a2a2a,#0a0a0a);border:2px solid #333;color:var(--gold);font-weight:900;font-size:20px">HOLD TO TRANSMIT</button>
-<div id="radioFeed" style="margin-top:12px"></div></div></div>
+<div class="view" id="radioView"><div class="view-head"><b>📻 ZONDI Radio Net</b><span class="badge live" id="radioStatus">Scanning...</span><button class="btn" onclick="closeViews()">✕</button></div>
+<div style="padding:14px">
+  <div class="radio-net">
+    <div class="net-head"><span id="netDot" class="dot"></span><b id="netText">RADIO NET</b> — <span id="netStatus">Searching...</span> <span id="netCount" class="badge-net">0</span></div>
+    <div id="radioList" class="radio-list"><span style="font-size:11px;color:#666">Scanning for radios...</span></div>
+    <canvas id="waveCanvas" width="340" height="70"></canvas>
+    <select id="channel" style="width:100%;background:#0b0b09;color:#fff;border:1px solid #2a2a2a;padding:12px;border-radius:12px;margin-bottom:8px"><option value="1">CH 1 — Alpha</option><option value="2">CH 2 — Response</option><option value="3">CH 3 — Command</option><option value="4">CH 4 — Private</option></select>
+  </div>
+  <button id="ptt" class="ptt">🎙️ HOLD TO TRANSMIT</button>
+  <div id="radioFeed" style="margin-top:12px"></div>
+</div></div>
 
 <div class="view" id="qrView"><div class="view-head"><b>📷 Patrol Scanner</b><button class="btn" onclick="closeViews()">✕</button></div>
 <div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn gold" onclick="startScanner('qr')">QR Checkpoint</button><button class="btn" id="nfcBtn" onclick="startScanner('nfc')">NFC Tap</button><button class="btn" onclick="startScanner('id')">ID / Visitor</button></div>
@@ -82,10 +101,10 @@ body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;
 <button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff;width:52px;height:52px">🧰</div></button>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/assets/zondi-radio.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const $=id=>document.getElementById(id);
-window.openView=id=>{const el=document.getElementById(id); if(!el) return alert('View '+id+' coming soon'); document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); el.classList.add('active'); if(id==='mapView') setTimeout(()=>{try{map.invalidateSize()}catch{}},350);};
+window.openView=id=>{const el=document.getElementById(id); if(!el) return; document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); el.classList.add('active'); if(id==='mapView') setTimeout(()=>{try{map.invalidateSize()}catch{}},350); if(id==='radioView') heartbeat(true);};
 window.closeViews=()=>document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
 
 const token=localStorage.getItem('zondi_token')||sessionStorage.getItem('zondi_token');
@@ -110,13 +129,80 @@ if($('locate')) $('locate').onclick=()=>navigator.geolocation.getCurrentPosition
 let watch=null; if($('share')) $('share').onclick=()=>{if(watch){navigator.geolocation.clearWatch(watch);watch=null;$('share').textContent='Start location';$('conn').textContent='Offline';return;}watch=navigator.geolocation.watchPosition(async p=>{try{await fetch('/api/location/update',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})}); if($('conn')){ $('conn').textContent='Online'; $('conn').className='badge live';}}catch{}},{enableHighAccuracy:true});$('share').textContent='Stop patrol';};
 load(); setInterval(load,15000);
 
-try{
-  const socket=io({auth:{token},transports:['websocket','polling']});
-  socket.on('connect',()=>{ if($('conn')){ $('conn').textContent='Online'; $('conn').className='badge live';} socket.emit('join_channel',{channel:($('channel')?.value||'1')});});
-  socket.on('disconnect',()=>{ if($('conn')){ $('conn').textContent='Offline'; $('conn').className='badge';}});
-  if(window.initZondiRadio) window.initZondiRadio({socket,token,user:me,statusElId:'radioStatus',feedElId:'radioFeed'});
-}catch(e){}
+// === RADIO NET LOGIC - REAL PRESENCE ===
+const pttBtn=$('ptt'), netDot=$('netDot'), netStatus=$('netStatus'), netCount=$('netCount'), radioList=$('radioList'), waveCanvas=$('waveCanvas'), radioStatus=$('radioStatus'), radioFeed=$('radioFeed');
+const ctx=waveCanvas.getContext('2d');
+let recorder=null,chunks=[], isTx=false, lat=null,lng=null;
+navigator.geolocation.watchPosition(p=>{lat=p.coords.latitude;lng=p.coords.longitude;});
 
+async function heartbeat(tx=false){
+  try{
+    const r=await fetch('/api/radio/presence',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat,lng,tx})});
+    const d=await r.json();
+    if(!d.ok) return;
+    netDot.className='dot '+(d.connected>1?'on':'');
+    radioStatus.textContent = d.connected>1?`Connected • ${d.connected}`:'Scanning...';
+    netStatus.textContent = d.connected>1?`Connected to ${d.connected-1} radio(s)`:'No other radios online';
+    netCount.textContent = d.connected;
+    if(d.radios.length===0){
+      radioList.innerHTML='<span style="font-size:11px;color:#666">No other guards — open patrol on another phone to see connection</span>';
+    }else{
+      radioList.innerHTML=d.radios.map(u=>`<div class="ru ${u.tx?'tx':''}">${u.tx?'🔴': '📻'} ${esc(u.name)} ${u.tx?'• TRANSMITTING':''}</div>`).join('');
+      if(d.radios.some(u=>u.tx)) startWave(true);
+    }
+  }catch{}
+}
+function startWave(external=false){
+  let t=0;
+  function draw(){
+    ctx.clearRect(0,0,waveCanvas.width,waveCanvas.height);
+    ctx.strokeStyle=external?'#00ff88':'#FFC300'; ctx.lineWidth=2; ctx.beginPath();
+    for(let i=0;i<waveCanvas.width;i+=3){ const y=35+Math.sin(i*0.05 + t)*18; if(i===0) ctx.moveTo(i,y); else ctx.lineTo(i,y); }
+    ctx.stroke();
+    // pulse dots for each connected radio
+    ctx.fillStyle='#FFC300';
+    const count = parseInt(netCount.textContent||1);
+    for(let k=0;k<Math.min(count,5);k++){ ctx.beginPath(); ctx.arc(20+k*30, 35+Math.sin(t+k)*10, 4,0,Math.PI*2); ctx.fill(); }
+    t+=0.15;
+    if(isTx || external){ requestAnimationFrame(draw); }
+  }
+  draw();
+}
+
+async function startTx(e){
+  e.preventDefault(); if(isTx) return; isTx=true;
+  pttBtn.textContent='🔴 TRANSMITTING — waves to '+ (parseInt(netCount.textContent)-1) +' radio(s)'; pttBtn.dataset.tx='1';
+  heartbeat(true); startWave(false);
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    chunks=[]; recorder=new MediaRecorder(stream,{mimeType:'audio/webm;codecs=opus'});
+    recorder.ondataavailable=ev=>chunks.push(ev.data);
+    recorder.onstop=async()=>{
+      const blob=new Blob(chunks,{type:'audio/webm'}); const fd=new FormData(); fd.append('audio',blob,'r.webm');
+      const res=await fetch('/api/radio/push',{method:'POST',headers:auth(),body:fd}); const d=await res.json();
+      pttBtn.textContent=`📡 Wave sent to ${d.sent_to} radio(s)`;
+      setTimeout(()=>{pttBtn.textContent='🎙️ HOLD TO TRANSMIT'; ctx.clearRect(0,0,waveCanvas.width,waveCanvas.height);},1500);
+    };
+    recorder.start();
+  }catch{ alert('Mic permission needed'); isTx=false; pttBtn.textContent='🎙️ HOLD TO TRANSMIT'; }
+}
+function stopTx(e){ e.preventDefault(); if(!isTx) return; isTx=false; pttBtn.dataset.tx='0'; heartbeat(false); if(recorder && recorder.state==='recording'){recorder.stop(); recorder.stream.getTracks().forEach(t=>t.stop());} }
+
+pttBtn.addEventListener('mousedown',startTx); pttBtn.addEventListener('touchstart',startTx,{passive:false});
+pttBtn.addEventListener('mouseup',stopTx); pttBtn.addEventListener('touchend',stopTx,{passive:false});
+
+setInterval(()=>heartbeat(isTx),4000);
+heartbeat(false);
+
+async function pollFeed(){
+  try{
+    const r=await fetch('/api/radio/feed',{headers:auth()}); const d=await r.json();
+    if(d.ok && d.items){ radioFeed.innerHTML=d.items.slice(-6).reverse().map(i=>`<div style="background:#111;border-left:3px solid #FFC300;padding:8px;border-radius:6px;margin:6px 0;font-size:11px"><b>${esc(i.name)}</b> • ${new Date(i.time).toLocaleTimeString()}<br><audio controls src="${i.url}" style="width:100%;height:28px;margin-top:4px"></audio></div>`).join(''); }
+  }catch{}
+}
+setInterval(pollFeed,3500); pollFeed();
+
+// QR etc
 let lastScanData=null,lastPos=null;
 window.startScanner=async mode=>{
 const div=$('scanner');
@@ -147,12 +233,4 @@ try{ await fetch('/api/patrol-scan',{method:'POST',headers:{...auth(),'Content-T
 window.toggleTorch=async()=>{try{const s=await navigator.mediaDevices.getUserMedia({video:{torch:true}});const tr=s.getVideoTracks()[0];if(tr.getCapabilities().torch){const cur=tr.getSettings().torch;await tr.applyConstraints({advanced:[{torch:!cur}]}); setTimeout(()=>tr.stop(),5000);}else alert('Torch not supported');}catch{alert('Torch needs camera permission');}};
 window.submitIncident=async()=>{let t=$('incidentText')?.value;if(!t)return;await fetch('/api/incident',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({text:t,lat:lastPos?.coords.latitude,lng:lastPos?.coords.longitude})});alert('Incident logged');closeViews();};
 if($('logout')) $('logout').onclick=()=>{localStorage.clear();sessionStorage.clear();location.href='/login';};
-if($('chromeSearch')) $('chromeSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){let q=e.target.value.toLowerCase();if(/game|tiktok|instagram|facebook|porn|bet|casino/i.test(q)){alert('Blocked');return;} if($('chromeFrame')) $('chromeFrame').src='https://www.google.com/search?igu=1&q='+encodeURIComponent(q);}});
-(function(){
-  const btn = document.getElementById('nfcBtn');
-  if(!btn) return;
-  if(!('NDEFReader' in window)){
-    btn.style.opacity='0.25'; btn.style.pointerEvents='none'; btn.textContent='🚫 NFC N/A';
-  }
-})();
 </script></body></html>
