@@ -107,11 +107,10 @@ def db_save_user(u):
         print("db_save_user error", e)
         return False
 
-# init on startup
 if USE_PG:
     init_db()
 
-# --- FILE FALLBACK FOR VERCEL FREE ---
+# --- FILE FALLBACK ---
 DB_FILE = BASE_DIR / "zondi_db.json"
 USERS = {'client@test.com': {'email':'client@test.com','name':'Test Client','role':'client','password':generate_password_hash('12345678'), 'status':'active'}}
 PATROLLERS = []
@@ -123,7 +122,7 @@ def load_file_db():
     if DB_FILE.exists():
         try:
             data = json.loads(DB_FILE.read_text())
-            global USERS, PATROLLERS, LOCATIONS, SOS_EVENTS, RESET_REQUESTS
+            global USERS, PATROLLERS
             USERS = data.get("USERS", USERS)
             PATROLLERS = data.get("PATROLLERS", PATROLLERS)
         except: pass
@@ -198,15 +197,12 @@ def api_register():
     phone = str(data.get('phone','')).strip()
     if not email or len(pw)<6:
         return jsonify({'ok':False,'error':'Email and 6+ char password required'}), 400
-
     exists = db_get_user(email) if USE_PG else (USERS.get(email) or any(p['email'].lower()==email for p in PATROLLERS))
     if exists:
         return jsonify({'ok':False,'error':'Email already registered'}), 400
-
     hashed = generate_password_hash(pw)
     status = 'pending' if role=='patroller' else 'active'
     user_obj = {'email':email,'name':name,'role':role,'password':hashed,'status':status,'phone':phone}
-
     if USE_PG:
         db_save_user(user_obj)
     else:
@@ -215,7 +211,6 @@ def api_register():
         else:
             USERS[email]=user_obj
         save_file_db()
-
     if role=='patroller':
         return jsonify({'ok':True,'message':'Patroller registered, pending approval'})
     else:
@@ -236,7 +231,6 @@ def api_me(): return jsonify({'ok':True,'user':request.user_data})
 @app.route('/api/logout', methods=['POST'])
 def api_logout(): return jsonify({'ok':True})
 
-#... keep your other routes same (location, sos, admin)...
 @app.route('/api/location/update', methods=['POST'])
 @auth_required
 def loc_update():
@@ -292,8 +286,103 @@ def admin_approve():
         save_file_db()
     return jsonify({'ok':True})
 
+# --- FIX FOR API NOT FOUND BANNER ---
+@app.route('/api/dev-stats')
+@dev_auth_required
+def dev_stats():
+    if USE_PG:
+        try:
+            conn=get_conn(); cur=conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT COUNT(*) as c FROM zondi_users WHERE role='client'"); clients=cur.fetchone()['c']
+            cur.execute("SELECT COUNT(*) as c FROM zondi_users WHERE role='patroller' AND status='approved'"); patrollers=cur.fetchone()['c']
+            cur.execute("SELECT COUNT(*) as c FROM zondi_users WHERE role='patroller' AND status='pending'"); pending=cur.fetchone()['c']
+            conn.close()
+            return jsonify({'ok':True,'clients':clients,'patrollers':patrollers,'pending':pending,'incidents':0,'sos':0})
+        except: pass
+    return jsonify({'ok':True,'clients':len(USERS),'patrollers':len([p for p in PATROLLERS if p.get('status')=='approved']),'pending':len([p for p in PATROLLERS if p.get('status')=='pending']),'incidents':0,'sos':0})
+
+@app.route('/api/reset-requests')
+@dev_auth_required
+def reset_requests_route():
+    return jsonify({'ok':True,'requests':RESET_REQUESTS})
+
+@app.route('/api/clients/me')
+@auth_required
+def clients_me():
+    email=request.user_data['email'].lower()
+    u=db_get_user(email) if USE_PG else USERS.get(email)
+    return jsonify({'ok':True,'user':u or request.user_data})
+
+@app.route('/api/clients/requests')
+@auth_required
+def client_requests_route():
+    return jsonify({'ok':True,'requests':[]})
+
 @app.route('/api/forgot-password', methods=['POST'])
 def forgot_api(): return jsonify({'ok':True,'message':'Request sent to admin'})
+
+# --- ZONDI RADIO NET - REAL ---
+RADIO_DIR = BASE_DIR / "radio"
+RADIO_DIR.mkdir(exist_ok=True)
+RADIO_LOG = []
+RADIO_PRESENCE = {}
+
+def cleanup_presence():
+    now = datetime.utcnow()
+    dead = [e for e, v in list(RADIO_PRESENCE.items()) if (now - v['last']).total_seconds() > 35]
+    for e in dead:
+        del RADIO_PRESENCE[e]
+
+@app.route('/api/radio/presence', methods=['POST'])
+@auth_required
+def radio_presence():
+    data = request.get_json(silent=True) or {}
+    email = request.user_data['email'].lower()
+    RADIO_PRESENCE[email] = {
+        'email': email,
+        'name': request.user_data.get('name','Patroller'),
+        'role': request.user_data.get('role','patroller'),
+        'last': datetime.utcnow(),
+        'lat': data.get('lat'),
+        'lng': data.get('lng'),
+        'tx': data.get('tx', False)
+    }
+    cleanup_presence()
+    active = []
+    for v in RADIO_PRESENCE.values():
+        if v['email']!= email:
+            active.append({
+                'email': v['email'],
+                'name': v['name'],
+                'role': v['role'],
+                'active': True,
+                'tx': v['tx'],
+                'ago': int((datetime.utcnow() - v['last']).total_seconds())
+            })
+    return jsonify({'ok':True,'connected':len(RADIO_PRESENCE), 'radios':active})
+
+@app.route('/api/radio/feed')
+@auth_required
+def radio_feed():
+    cleanup_presence()
+    return jsonify({'ok':True,'items':RADIO_LOG[-20:], 'presence': list(RADIO_PRESENCE.values())})
+
+@app.route('/api/radio/push', methods=['POST'])
+@auth_required
+def radio_push():
+    f = request.files.get('audio')
+    if not f: return jsonify({'ok':False,'error':'No audio'}),400
+    fname = f"radio_{int(datetime.utcnow().timestamp())}_{request.user_data['email'].split('@')[0]}.webm"
+    path = RADIO_DIR / fname
+    f.save(str(path))
+    item = {'name':request.user_data.get('name','Patroller'),'email':request.user_data['email'].lower(),'time':datetime.utcnow().isoformat(),'file':fname,'url':f'/radio/{fname}'}
+    RADIO_LOG.append(item)
+    if len(RADIO_LOG)>50: RADIO_LOG.pop(0)
+    return jsonify({'ok':True,'item':item, 'sent_to': len(RADIO_PRESENCE)-1})
+
+@app.route('/radio/<path:filename>')
+def serve_radio(filename):
+    return send_from_directory(str(RADIO_DIR), filename)
 
 def safe_send(f):
     fp = BASE_DIR / f
@@ -323,7 +412,7 @@ def assets_route(path):
     return jsonify({'error': f'Asset {path} not found'}), 404
 @app.route('/<path:filename>')
 def catch_all(filename):
-    if filename.startswith('api/'): return jsonify({'ok':False,'error':'API not found'}), 404
+    if filename.startswith('api/'): return jsonify({'ok':False,'error':'API not found: '+filename}), 404
     p = BASE_DIR / filename
     if p.exists() and p.is_file(): return send_from_directory(str(BASE_DIR), filename)
     return send_from_directory(str(BASE_DIR), 'index.html')
