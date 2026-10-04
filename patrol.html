@@ -15,7 +15,7 @@ const $=id=>document.getElementById(id),auth=()=>({Authorization:'Bearer '+token
 $('me').textContent=me.name||me.email;
 const map=L.map('map',{maxZoom:22,minZoom:3}).setView([-26.171,27.86],18);
 const street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22,maxNativeZoom:19,attribution:'© OpenStreetMap'});
-const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:22,maxNativeZoom:19,attribution:'© Esri'});
+const satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',{maxZoom:22,maxNativeZoom:20,attribution:'© Google'});
 street.addTo(map);
 setTimeout(()=> map.invalidateSize(), 800);
 window.addEventListener('resize', ()=> map.invalidateSize());
