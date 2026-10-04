@@ -272,12 +272,21 @@ def forgot_route(): return safe_send('forgot-password.html')
 
 @app.route('/assets/<path:path>')
 def assets_route(path):
-    asset_dir = BASE_DIR / 'assets'
-    if not asset_dir.exists():
-        # fallback if folder named asset (singular) by mistake
-        asset_dir = BASE_DIR / 'asset'
-    return send_from_directory(str(asset_dir), path)
+    for folder_name in ['assets', 'asset']:
+        folder = BASE_DIR / folder_name
+        fp = folder / path
+        if fp.exists() and fp.is_file():
+            return send_from_directory(str(folder), path)
+    return jsonify({'error': f'Asset {path} not found'}), 404
 
+@app.route('/api/debug-assets')
+def debug_assets():
+    import os
+    asset_dir = BASE_DIR / 'assets'
+    files = []
+    if asset_dir.exists():
+        files = os.listdir(str(asset_dir))
+    return jsonify({'exists': asset_dir.exists(), 'files': files})
 # catch-all for any other.html file directly
 @app.route('/<path:filename>')
 def catch_all(filename):
