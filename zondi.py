@@ -1,720 +1,180 @@
-"""Zondi backend v5
-Production-oriented Flask + Socket.IO backend for the Zondi platform.
-Portals:
-    - Client
-    - Patrol
-    - Developer/Admin
-"""
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Zondi — Patrol OS</title><link rel="manifest" href="/assets/manifest.json">
+<link rel="stylesheet" href="/assets/zondi-theme.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--gold:#d4a73a}*{box-sizing:border-box}
+body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.top{height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 14px;font-size:11px;background:#000;border-bottom:1px solid #1e1e1e;z-index:10}
+.launcher{flex:1;overflow:auto;padding:14px 12px 110px;background:radial-gradient(120% 120% at 50% 0%,#1c1c1c 0%,#080808 100%)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:420px;margin:0 auto}
+.app{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;color:#fff;cursor:pointer;text-decoration:none;-webkit-tap-highlight-color:transparent}
+.icon{width:60px;height:60px;border-radius:16px;background:#111;border:1px solid #2a2a2a;display:grid;place-items:center;font-size:26px;box-shadow:0 6px 14px rgba(0,0,0,.6);position:relative}
+.icon.gold{background:radial-gradient(120% 120% at 50% 0%,#f5d06a 0%,#d4a73a 55%,#8a6a20 100%);color:#000}
+.icon.red{background:#2a0f0f;border-color:#4a1a1a}
+.icon.blue{background:#0f1a2a}
+.label{font-size:10px;opacity:.85;text-align:center;line-height:1.1}
+.dock{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);width:92%;max-width:400px;background:rgba(255,255,255,.15);backdrop-filter:blur(20px);border-radius:26px;padding:8px 10px;display:flex;justify-content:space-around;border:1px solid rgba(255,255,255,.2);z-index:60}
+.view{display:none;position:fixed;inset:0;background:#080808;z-index:100;overflow:auto;padding-bottom:90px}
+.view.active{display:block}
+.view-head{position:sticky;top:0;background:#0f0f0f;border-bottom:1px solid #1e1e1e;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;z-index:5}
+.btn{padding:9px 14px;border-radius:10px;border:1px solid #2a2a2a;background:#151515;color:#fff;font-size:12px;cursor:pointer}
+.btn.gold{background:var(--gold);color:#000;font-weight:800;border-color:var(--gold)}
+.badge{font-size:10px;padding:4px 8px;border-radius:99px;background:#1a1a1a;border:1px solid #2a2a2a}
+.badge.live{background:var(--gold);color:#000;font-weight:800}
+#map{height:58vh;min-height:400px;background:#111;border-radius:12px;margin:10px}
+.store-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
+.store-card{background:#111;border:1px solid #222;border-radius:14px;padding:12px}
+.store-card.blocked{opacity:.35;border-color:#331111}
+#scanner{width:100%;aspect-ratio:1;background:#000;border-radius:16px;border:1px solid #222;overflow:hidden;display:grid;place-items:center}
+</style>
+</head><body>
+<div class="top"><span id="clock">ZONDI SECURE • ENC ON</span><span id="conn" class="badge">Offline</span></div>
 
-import os
-import threading
-import uuid
+<div class="launcher" id="home">
+<div style="text-align:center;margin:6px 0 14px;opacity:.4;font-size:10px;letter-spacing:2px">ZONDI OS • DESIGNED BY G.V MKHWANAZI™ • SUPER ZOOM</div>
+<div class="grid">
+<button class="app" onclick="openView('mapView')"><div class="icon gold">🗺️</div><div class="label">Live Map</div></button>
+<button class="app" onclick="openView('radioView')"><div class="icon gold">📻</div><div class="label">Z-Radio</div></button>
+<button class="app" onclick="openView('qrView')"><div class="icon">📷</div><div class="label">QR Patrol</div></button>
+<button class="app" onclick="openView('sosView')"><div class="icon red">🆘</div><div class="label">SOS</div></button>
+<button class="app" onclick="openView('clientsView')"><div class="icon blue">👥</div><div class="label">Clients</div></button>
+<button class="app" onclick="openView('incidentView')"><div class="icon">📝</div><div class="label">Incident</div></button>
+<button class="app" onclick="openView('bodycamView')"><div class="icon">🎥</div><div class="label">BodyCam</div></button>
+<button class="app" onclick="toggleTorch()"><div class="icon">🔦</div><div class="label">Torch</div></button>
+<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff">🧰</div><div class="label">Z-Tools</div></button>
+<button class="app" onclick="openView('chromeView')"><div class="icon" style="background:#fff;color:#000">🌐</div><div class="label">Chrome</div></button>
+<button class="app" onclick="openView('weatherView')"><div class="icon">⛅</div><div class="label">Weather</div></button>
+<button class="app" onclick="openView('settingsView')"><div class="icon">⚙️</div><div class="label">Settings</div></button>
+</div>
+</div>
 
-from sqlalchemy import JSON, DateTime, Integer, String, UniqueConstraint, create_engine, delete, select, update
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
-from datetime import datetime, timedelta, timezone
-from functools import wraps
+<div class="view" id="mapView"><div class="view-head"><b>🗺️ Live Tracking • Super Zoom</b><button class="btn" onclick="closeViews()">✕ Close</button></div>
+<div style="padding:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fit">⌗ Fit clients</button><button class="btn" id="locate">📍 My location</button><button class="btn" id="sat">🛰️ Satellite</button><button class="btn gold" id="share">Start patrol location</button></div>
+<div id="map"></div><div id="clients" style="padding:12px"></div></div>
 
-from flask import Flask, jsonify, redirect, request, send_from_directory, session
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit, join_room, leave_room
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from werkzeug.security import check_password_hash, generate_password_hash
+<div class="view" id="radioView"><div class="view-head"><b>📻 YANTON Radio</b><span class="badge live" id="radioStatus">Ready</span><button class="btn" onclick="closeViews()">✕</button></div>
+<div style="padding:14px"><select id="channel" style="width:100%;background:#0b0b09;color:#fff;border:1px solid #2a2a2a;padding:12px;border-radius:12px"><option value="1">CH 1 — Alpha</option><option value="2">CH 2 — Response</option><option value="3">CH 3 — Command</option><option value="4">CH 4 — Private</option></select>
+<button id="ptt" style="width:100%;min-height:160px;margin-top:14px;border-radius:24px;background:radial-gradient(#2a2a2a,#0a0a0a);border:2px solid #333;color:var(--gold);font-weight:900;font-size:20px">HOLD TO TRANSMIT</button>
+<div id="radioFeed" style="margin-top:12px"></div></div></div>
 
-# -----------------------------------------------------------------------------
-# APP / CONFIG
-# -----------------------------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+<div class="view" id="qrView"><div class="view-head"><b>📷 Patrol Scanner • QR + NFC</b><button class="btn" onclick="closeViews()">✕</button></div>
+<div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn gold" id="qrBtn" onclick="startScanner('qr')">QR Checkpoint</button><button class="btn" id="nfcBtn" onclick="startScanner('nfc')">NFC Tap</button><button class="btn" onclick="startScanner('id')">ID / Visitor</button></div>
+<div id="scanner"><div style="opacity:.4;text-align:center">📷<br>Tap QR to start<br><small>YANTON side button also works</small></div></div>
+<div style="margin-top:12px;background:#111;border:1px solid #222;border-radius:12px;padding:12px"><div style="font-size:11px;opacity:.6">LAST SCAN</div><div id="lastScan" style="font-size:13px;margin-top:4px">No scan yet</div><div id="scanMeta" style="font-size:11px;opacity:.5;margin-top:4px"></div></div>
+<button class="btn gold" style="width:100%;margin-top:12px;padding:14px" onclick="uploadScan()">✅ Confirm Patrol Point</button>
+<div id="tour" style="margin-top:12px;font-size:11px;opacity:.6"></div></div></div>
 
-app = Flask(__name__, static_folder=BASE_DIR)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
-if not app.config["SECRET_KEY"]:
-    app.config["SECRET_KEY"] = "CHANGE-ME-IN-PRODUCTION"
+<div class="view" id="sosView"><div class="view-head"><b>🚨 Active SOS</b><button class="btn" onclick="closeViews()">✕</button></div><div id="sos" style="padding:12px"></div></div>
+<div class="view" id="clientsView"><div class="view-head"><b>👥 Active Clients</b><button class="btn" onclick="closeViews()">✕</button></div><div id="clients2" style="padding:12px"></div></div>
+<div class="view" id="incidentView"><div class="view-head"><b>📝 Incident Report</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><textarea id="incidentText" placeholder="Describe incident..." style="width:100%;height:120px;background:#111;border:1px solid #222;color:#fff;border-radius:10px;padding:10px"></textarea><button class="btn gold" style="width:100%;margin-top:10px" onclick="submitIncident()">Submit</button></div></div>
+<div class="view" id="toolsView"><div class="view-head"><b>🧰 Z-Tools Store — Security Only</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:10px;font-size:11px;opacity:.6">Games, TikTok, Social blocked by policy. Only security tools.</div><div class="store-grid" id="storeGrid"></div></div>
+<div class="view" id="chromeView"><div class="view-head"><b>🌐 Chrome — Restricted</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><input id="chromeSearch" placeholder="Search Google (security only)" style="width:100%;padding:12px;border-radius:12px;border:1px solid #333;background:#111;color:#fff"><iframe id="chromeFrame" style="width:100%;height:70vh;border:0;background:#fff;border-radius:12px;margin-top:12px" src="https://www.google.com/search?igu=1&q=security+guard+tools"></iframe></div></div>
+<div class="view" id="settingsView"><div class="view-head"><b>⚙️ Settings</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:14px"><div>Logged in as: <b id="me"></b></div><button class="btn" id="logout" style="margin-top:20px;background:#c00;border-color:#c00;width:100%;padding:14px">Sign out</button><div style="margin-top:20px;font-size:10px;opacity:.4">ZONDI OS • YANTON COMPATIBLE • KIOSK MODE READY</div></div></div>
+<div class="view" id="bodycamView"><div class="view-head"><b>🎥 BodyCam</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:20px;text-align:center;opacity:.5">BodyCam live coming — YANTON cam API</div></div>
+<div class="view" id="weatherView"><div class="view-head"><b>⛅ Weather</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:20px;opacity:.5">Weather radar — patrol safe</div></div>
 
-app.permanent_session_lifetime = timedelta(hours=8)
+<div class="dock">
+<button class="app" onclick="openView('mapView')"><div class="icon" style="background:#2ecc71;width:52px;height:52px">🗺️</div></button>
+<button class="app" onclick="openView('radioView')"><div class="icon gold" style="width:52px;height:52px">📻</div></button>
+<button class="app" onclick="openView('qrView')"><div class="icon" style="width:52px;height:52px">📷</div></button>
+<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff;width:52px;height:52px">🧰</div></button>
+</div>
 
-cors_origins = os.environ.get("CORS_ORIGINS", "*")
-CORS(app, resources={r"/api/*": {"origins": cors_origins}}, supports_credentials=True)
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/assets/zondi-radio.js"></script>
+<script>
+// --- CORE - tabs defined FIRST so clicks never die ---
+const token=sessionStorage.getItem('zondi_token')||localStorage.getItem('zondi_token'),raw=sessionStorage.getItem('zondi_user')||localStorage.getItem('zondi_user'),me=raw?JSON.parse(raw):null;
+if(!token||!me||me.role!=='patroller') location.href='/login';
+const $=id=>document.getElementById(id);
+const auth=()=>({Authorization:'Bearer '+token});
+if(me) $('me').textContent=me.name||me.email;
 
-socketio = SocketIO(app, cors_allowed_origins=cors_origins, async_mode=os.environ.get("SOCKETIO_ASYNC_MODE", "eventlet"), logger=False, engineio_logger=False)
+window.openView=id=>{ document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); const el=document.getElementById(id); if(el) el.classList.add('active'); if(id==='mapView' && window.map) setTimeout(()=>{try{map.invalidateSize()}catch{}},300); };
+window.closeViews=()=>document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
 
-DEV_TOKEN_MAX_AGE = 8 * 60 * 60
-USER_TOKEN_MAX_AGE = 12 * 60 * 60
-CLIENT_LIVE_WINDOW_SECONDS = int(os.environ.get("CLIENT_LIVE_WINDOW_SECONDS", "120"))
+setInterval(()=>{ try{$('clock').textContent=new Date().toLocaleTimeString()+' • ZONDI SECURE • ENC ON';}catch{}},1000);
 
-def now_utc(): return datetime.now(timezone.utc)
-def iso_now(): return now_utc().isoformat()
-def parse_time(value):
-    if not value: return None
-    try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
-        return dt
-    except: return None
+// --- MAP SAFE ---
+let map, street, sat, isSat=false;
+try{
+  map=L.map('map',{maxZoom:20,minZoom:3}).setView([-26.171,27.86],18);
+  street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19});
+  sat=L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{subdomains:['mt0','mt1','mt2','mt3'],maxZoom:20});
+  street.addTo(map); window.map=map;
+  $('sat').onclick=()=>{ if(!isSat){map.removeLayer(street);sat.addTo(map);$('sat').textContent='🗺️ Street';isSat=true;}else{map.removeLayer(sat);street.addTo(map);$('sat').textContent='🛰️ Satellite';isSat=false;}};
+}catch(e){console.warn('map fail',e);}
 
-# -----------------------------------------------------------------------------
-# DATABASE
-# -----------------------------------------------------------------------------
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgres://"):]
-elif DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
-    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://"):]
-if not DATABASE_URL:
-    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
-        DATABASE_URL = "sqlite:////tmp/zondi_dev.db"
-    else:
-        DATABASE_URL = "sqlite:///zondi_dev.db"
+const clientMarkers=new Map(),clientData=new Map();
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function upsertClient(x){ if(!map) return; if(x.lat==null||x.lng==null||!x.user_id) return; clientData.set(String(x.user_id),x); let m=clientMarkers.get(String(x.user_id)); if(!m){m=L.marker([x.lat,x.lng]).addTo(map); clientMarkers.set(String(x.user_id),m);} else m.setLatLng([x.lat,x.lng]); m.bindPopup(`<b>${esc(x.name||x.email)}</b>`); renderClients(); }
+function renderClients(){ const h=[...clientData.values()].map(x=>`<div style="padding:10px;border-bottom:1px solid #1a1a1a"><b>${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${esc(x.email)} • ${x.lat?.toFixed(4)},${x.lng?.toFixed(4)}</div></div>`).join('')||'<div style="opacity:.5;padding:10px">No clients</div>'; try{$('clients').innerHTML=h; $('clients2').innerHTML=h;}catch{} }
+async function load(){ try{ let a=await fetch('/api/location/live',{headers:auth()}); if(a.ok)(await a.json()).forEach(upsertClient); let c=await fetch('/api/sos-feed',{headers:auth()}); if(c.ok){ let sos=await c.json(); $('sos').innerHTML=sos.filter(x=>x.status==='active').slice(-20).map(x=>`<div style="padding:10px;border:1px solid #331;background:#1a0a0a;border-radius:10px;margin-bottom:8px"><b>🚨 ${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${new Date(x.time).toLocaleString()}</div></div>`).join('')||'No active SOS'; } }catch{} }
+try{ $('fit').onclick=()=>{ let pts=[...clientMarkers.values()].map(m=>m.getLatLng()); if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:20}); }; $('locate').onclick=()=>navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],20)); }catch{}
+let watch=null;
+try{ $('share').onclick=()=>{ if(watch){navigator.geolocation.clearWatch(watch); watch=null; $('share').textContent='Start patrol location'; $('share').className='btn gold'; $('conn').textContent='Offline'; return;} watch=navigator.geolocation.watchPosition(async p=>{ try{ await fetch('/api/patroller-ping',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})}); $('conn').textContent='Online'; $('conn').className='badge live'; }catch{} },{},{enableHighAccuracy:true}); $('share').textContent='Stop patrol'; }; }catch{}
 
-engine_kwargs = {"pool_pre_ping": True}
-if DATABASE_URL.startswith("postgresql+"):
-    engine_kwargs.update({"pool_size": int(os.environ.get("DB_POOL_SIZE", "10")), "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "20"))})
-else:
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
+// --- RADIO SAFE ---
+try{
+  const socket=io({auth:{token},transports:['websocket','polling']});
+  socket.on('connect',()=>{ $('conn').textContent='Online'; $('conn').className='badge live'; try{socket.emit('join_channel',{channel:$('channel').value,auth:{token}})}catch{} });
+  socket.on('disconnect',()=>{ $('conn').textContent='Offline'; $('conn').className='badge'; });
+  if(window.initZondiRadio) window.initZondiRadio({socket,token,user:me,statusElId:'radioStatus',feedElId:'radioFeed'});
+  window._socket=socket;
+}catch(e){ console.warn('radio fail',e); }
 
-engine = create_engine(DATABASE_URL, **engine_kwargs)
-
-class Base(DeclarativeBase): pass
-class ZondiRecord(Base):
-    __tablename__ = "zondi_records"
-    __table_args__ = (UniqueConstraint("collection", "record_key", name="uq_zondi_collection_key"),)
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    collection: Mapped[str] = mapped_column(String(80), index=True)
-    record_key: Mapped[str] = mapped_column(String(255), default="", index=True)
-    payload: Mapped[dict] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-COLLECTIONS = {"users":"users","locations":"locations_history","sos":"sos","patrollers":"patrollers_latest","radio":"radio","scans":"scans","password_resets":"password_resets"}
-LATEST_LOCATION_COLLECTION = "locations_latest"
-LATEST_PATROLLER_COLLECTION = "patrollers_latest"
-FILES = {"users":"users.json","locations":"locations.json","sos":"sos_feed.json","patrollers":"patrollers_live.json","radio":"radio_talk.json","scans":"scans.json","password_resets":"password_resets.json"}
-
-db_lock = threading.RLock()
-channel_lock = threading.RLock()
-active_talkers = {}
-socket_channels = {}
-channel_members = {}
-
-def db_init(): Base.metadata.create_all(engine)
-def _collection_for_path(path):
-    name = os.path.basename(str(path))
-    return {"users.json":"users","locations.json":"locations_history","sos_feed.json":"sos","patrollers_live.json":"patrollers_latest","radio_talk.json":"radio","scans.json":"scans","password_resets.json":"password_resets"}.get(name, name.rsplit(".",1)[0])
-def load_collection(collection):
-    with db_lock, Session(engine) as db:
-        rows = db.scalars(select(ZondiRecord).where(ZondiRecord.collection==collection).order_by(ZondiRecord.created_at.asc(), ZondiRecord.id.asc())).all()
-        return [dict(row.payload or {}) for row in rows]
-def load_json(path): return load_collection(_collection_for_path(path))
-def save_collection(collection, data):
-    now = now_utc()
-    with db_lock, Session(engine) as db:
-        db.execute(delete(ZondiRecord).where(ZondiRecord.collection==collection))
-        for item in data:
-            payload = dict(item or {})
-            key = str(payload.get("id") or uuid.uuid4())
-            db.add(ZondiRecord(collection=collection, record_key=key, payload=payload, created_at=now, updated_at=now))
-        db.commit()
-def save_json(path, data): save_collection(_collection_for_path(path), data)
-def upsert_record(collection, key, payload):
-    now = now_utc(); key=str(key)
-    with db_lock, Session(engine) as db:
-        row = db.scalar(select(ZondiRecord).where(ZondiRecord.collection==collection, ZondiRecord.record_key==key))
-        if row: row.payload=dict(payload); row.updated_at=now
-        else: db.add(ZondiRecord(collection=collection, record_key=key, payload=dict(payload), created_at=now, updated_at=now))
-        db.commit()
-def append_record(collection, payload, max_rows=None):
-    now = now_utc(); key=str(payload.get("id") or uuid.uuid4())
-    with db_lock, Session(engine) as db:
-        db.add(ZondiRecord(collection=collection, record_key=key, payload=dict(payload), created_at=now, updated_at=now)); db.commit()
-        if max_rows:
-            ids = db.scalars(select(ZondiRecord.id).where(ZondiRecord.collection==collection).order_by(ZondiRecord.created_at.desc(), ZondiRecord.id.desc()).offset(max_rows)).all()
-            if ids: db.execute(delete(ZondiRecord).where(ZondiRecord.id.in_(ids))); db.commit()
-def get_record(collection, key):
-    with db_lock, Session(engine) as db:
-        row = db.scalar(select(ZondiRecord).where(ZondiRecord.collection==collection, ZondiRecord.record_key==str(key)))
-        return dict(row.payload or {}) if row else None
-def delete_record(collection, key):
-    with db_lock, Session(engine) as db:
-        db.execute(delete(ZondiRecord).where(ZondiRecord.collection==collection, ZondiRecord.record_key==str(key))); db.commit()
-def init_files(): db_init()
-db_init()
-
-# -----------------------------------------------------------------------------
-# AUTH HELPERS
-# -----------------------------------------------------------------------------
-def sanitize_user(user): return {k:v for k,v in user.items() if k not in {"password"}}
-def find_user(email):
-    email=(email or "").strip().lower()
-    if not email: return None
-    return get_record("users", email)
-def create_token(scope, subject, max_age):
-    serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"], salt=f"zondi-{scope}-v1")
-    return serializer.dumps({"scope":scope,"sub":subject,"v":1}), max_age
-def read_token(token, scope, max_age):
-    if not token: return None
-    serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"], salt=f"zondi-{scope}-v1")
-    try:
-        payload = serializer.loads(token, max_age=max_age)
-        if payload.get("scope")!=scope: return None
-        return payload
-    except: return None
-def bearer_token():
-    value=request.headers.get("Authorization","")
-    return value[7:].strip() if value.startswith("Bearer ") else ""
-def current_user():
-    email=session.get("user_email")
-    if email:
-        user=find_user(email)
-        if user: return user
-    payload=read_token(bearer_token(),"user",USER_TOKEN_MAX_AGE)
-    if payload:
-        user=find_user(payload.get("sub"))
-        if user: return user
-    return None
-def require_user(f):
-    @wraps(f)
-    def wrapper(*args,**kwargs):
-        user=current_user()
-        if not user: return jsonify({"ok":False,"error":"Authentication required"}),401
-        if user.get("role")=="patroller" and user.get("status")!="approved": return jsonify({"ok":False,"error":"Patroller account is not approved"}),403
-        return f(user,*args,**kwargs)
-    return wrapper
-def require_patroller(f):
-    @wraps(f)
-    def wrapper(*args,**kwargs):
-        user=current_user()
-        if not user: return jsonify({"ok":False,"error":"Authentication required"}),401
-        if user.get("role")!="patroller" or user.get("status")!="approved": return jsonify({"ok":False,"error":"Approved patroller access required"}),403
-        return f(user,*args,**kwargs)
-    return wrapper
-def require_dev_auth():
-    if session.get("dev_authenticated") is True: return True
-    payload=read_token(bearer_token(),"developer",DEV_TOKEN_MAX_AGE)
-    return payload is not None
-def require_dev(f):
-    @wraps(f)
-    def wrapper(*args,**kwargs):
-        if not require_dev_auth(): return jsonify({"ok":False,"error":"Developer authentication required"}),401
-        return f(*args,**kwargs)
-    return wrapper
-
-# -----------------------------------------------------------------------------
-# PAGE ROUTES
-# -----------------------------------------------------------------------------
-@app.route("/")
-def home():
-    if os.path.exists(os.path.join(BASE_DIR, "index.html")): return send_from_directory(BASE_DIR, "index.html")
-    if os.path.exists(os.path.join(BASE_DIR, "login.html")): return send_from_directory(BASE_DIR, "login.html")
-    return jsonify({"name":"Zondi","status":"running"})
-PAGE_ALIASES = {"/login":"login.html","/login.html":"login.html","/register":"register.html","/register.html":"register.html","/dashboard":"dashboard.html","/dashboard.html":"dashboard.html","/forgot-password":"forgot-password.html","/forgot-password.html":"forgot-password.html","/clients":"clients.html","/clients.html":"clients.html","/patrol":"patrol.html","/patrol.html":"patrol.html","/admin":"dev_portal.html","/admin.html":"dev_portal.html","/dev":"dev_portal.html","/dev.html":"dev_portal.html","/radio":"radio.html","/radio.html":"radio.html"}
-@app.route("/health")
-def health(): return jsonify({"ok":True,"service":"zondi","time":iso_now()})
-@app.route("/<path:path>")
-def static_pages(path):
-    route="/"+path
-    filename=PAGE_ALIASES.get(route)
-    if filename and os.path.exists(os.path.join(BASE_DIR, filename)): return send_from_directory(BASE_DIR, filename)
-    if os.path.isfile(os.path.join(BASE_DIR, path)): return send_from_directory(BASE_DIR, path)
-    return jsonify({"ok":False,"error":"Not found"}),404
-
-# -----------------------------------------------------------------------------
-# REGISTRATION / LOGIN
-# -----------------------------------------------------------------------------
-@app.route("/api/register", methods=["POST"])
-@app.route("/api/signup", methods=["POST"])
-def api_register():
-    data=request.get_json(silent=True) or {}
-    email=str(data.get("email","")).strip().lower()
-    password=str(data.get("password",""))
-    role=str(data.get("role","client")).strip().lower()
-    if role not in {"client","patroller"}: return jsonify({"ok":False,"error":"Public registration supports client or patroller only"}),400
-    if not email or not password: return jsonify({"ok":False,"error":"Email and password required"}),400
-    if len(password)<8: return jsonify({"ok":False,"error":"Password must be at least 8 characters"}),400
-    if find_user(email): return jsonify({"ok":False,"error":"Email already registered"}),409
-    user={"id":str(uuid.uuid4()),"email":email,"password":generate_password_hash(password),"role":role,"name":str(data.get("name","")).strip(),"phone":str(data.get("phone","")).strip(),"status":"approved" if role=="client" else "pending","created_at":iso_now()}
-    upsert_record("users", user["email"], user)
-    return jsonify({"ok":True,"user":sanitize_user(user),"message":"Registered" if role=="client" else "Patroller account pending developer approval"}),201
-
-@app.route("/api/login", methods=["POST"])
-def api_login():
-    data=request.get_json(silent=True) or {}
-    email=str(data.get("email","")).strip().lower()
-    password=str(data.get("password",""))
-    user=find_user(email)
-    if not user: return jsonify({"ok":False,"error":"Wrong email or password"}),401
-    stored=str(user.get("password","")); valid=False
-    try: valid=check_password_hash(stored,password)
-    except: valid=False
-    if not valid and stored==password and password:
-        user["password"]=generate_password_hash(password); upsert_record("users", user.get("email"), user); valid=True
-    if not valid: return jsonify({"ok":False,"error":"Wrong email or password"}),401
-    if user.get("role")=="patroller" and user.get("status")!="approved":
-        return jsonify({"ok":False,"error":f"Account {user.get('status','pending')}. Wait for developer approval","status":user.get("status","pending")}),403
-    session.clear(); session.permanent=True; session["user_email"]=user["email"]
-    token,expires=create_token("user", user["email"], USER_TOKEN_MAX_AGE)
-    return jsonify({"ok":True,"user":sanitize_user(user),"token":token,"expires_in":expires})
-
-@app.route("/api/logout", methods=["POST"])
-def api_logout(): session.clear(); return jsonify({"ok":True})
-@app.route("/api/me")
-@require_user
-def api_me(user): return jsonify({"ok":True,"user":sanitize_user(user)})
-
-# -----------------------------------------------------------------------------
-# DEVELOPER PORTAL
-# -----------------------------------------------------------------------------
-@app.route("/api/dev-login", methods=["POST"])
-def dev_login():
-    data=request.get_json(silent=True) or {}
-    password=str(data.get("password",""))
-    expected=os.environ.get("DEV_PORTAL_PASSWORD","")
-    if not expected: return jsonify({"ok":False,"error":"Developer portal password is not configured"}),503
-    if password!=expected: session.clear(); return jsonify({"ok":False,"error":"Incorrect developer password"}),401
-    session.clear(); session.permanent=True; session["dev_authenticated"]=True; session["dev_login_at"]=iso_now()
-    token,expires=create_token("developer","developer",DEV_TOKEN_MAX_AGE)
-    return jsonify({"ok":True,"authenticated":True,"token":token,"expires_in":expires,"redirect":"/dev"})
-@app.route("/api/dev-status")
-def dev_status(): return jsonify({"ok":True,"authenticated":require_dev_auth(),"login_at":session.get("dev_login_at")})
-@app.route("/api/dev-logout", methods=["POST"])
-def dev_logout(): session.clear(); return jsonify({"ok":True})
-@app.route("/api/admin/pending")
-@require_dev
-def admin_pending():
-    users=load_json(FILES["users"])
-    pending=[sanitize_user(u) for u in users if u.get("role")=="patroller" and u.get("status")=="pending"]
-    all_patrollers=[sanitize_user(u) for u in users if u.get("role")=="patroller"]
-    return jsonify({"ok":True,"pending":pending,"all_patrollers":all_patrollers})
-@app.route("/api/admin/approve", methods=["POST"])
-@require_dev
-def admin_approve():
-    data=request.get_json(silent=True) or {}
-    email=str(data.get("email","")).strip().lower()
-    action=str(data.get("action","approve")).strip().lower()
-    if action not in {"approve","reject","revoke"}: return jsonify({"ok":False,"error":"Invalid action"}),400
-    user=find_user(email)
-    if not user or user.get("role")!="patroller": return jsonify({"ok":False,"error":"Patroller not found"}),404
-    user["status"]={"approve":"approved","reject":"rejected","revoke":"pending"}[action]
-    upsert_record("users", email, user)
-    return jsonify({"ok": True, "action": action, "email": email})
-
-# -----------------------------------------------------------------------------
-# DELETE GHOST CLIENT — Fix for Thato nkgau duplicate dot
-# -----------------------------------------------------------------------------
-@app.route("/api/users/<user_id>", methods=["DELETE"])
-@app.route("/api/clients/<user_id>", methods=["DELETE"])
-@require_user
-def api_delete_user(current_user_obj, user_id):
-    all_users = load_collection("users")
-    target = None
-    target_key = None
-    for u in all_users:
-        if str(u.get("id")) == str(user_id) or str(u.get("email","")).lower() == str(user_id).lower():
-            target = u
-            target_key = str(u.get("email","")).lower()
-            break
-    if not target:
-        direct = get_record("users", str(user_id).lower())
-        if direct:
-            target = direct
-            target_key = str(user_id).lower()
-    if not target:
-        return jsonify({"ok": False, "error": "User not found"}), 404
-    if target_key == current_user_obj.get("email","").lower():
-        return jsonify({"ok": False, "error": "Cannot delete yourself"}), 400
-
-    delete_record("users", target_key)
-    delete_record(LATEST_LOCATION_COLLECTION, target.get("id"))
-    delete_record(LATEST_LOCATION_COLLECTION, target_key)
-    delete_record(LATEST_PATROLLER_COLLECTION, target.get("id"))
-    with db_lock, Session(engine) as db:
-        rows = db.scalars(select(ZondiRecord).where(ZondiRecord.collection == "locations_history")).all()
-        for r in rows:
-            p = r.payload or {}
-            if p.get("user_id") == target.get("id") or p.get("email","").lower() == target_key:
-                db.delete(r)
-        db.commit()
-    try:
-        socketio.emit("client_removed", {"user_id": target.get("id"), "email": target_key}, room="patrollers_room")
-    except: pass
-    return jsonify({"ok": True, "deleted": target_key})
-
-@app.route("/api/location/delete/<user_id>", methods=["DELETE"])
-@require_user
-def api_delete_location(current_user_obj, user_id):
-    delete_record(LATEST_LOCATION_COLLECTION, str(user_id))
-    delete_record(LATEST_PATROLLER_COLLECTION, str(user_id))
-    with db_lock, Session(engine) as db:
-        rows = db.scalars(select(ZondiRecord).where(ZondiRecord.collection == "locations_history")).all()
-        for r in rows:
-            if (r.payload or {}).get("user_id") == str(user_id):
-                db.delete(r)
-        db.commit()
-    return jsonify({"ok": True})
-
-# -----------------------------------------------------------------------------
-# PASSWORD RECOVERY
-# -----------------------------------------------------------------------------
-@app.route("/api/forgot-password", methods=["POST"])
-def forgot_password():
-    data = request.get_json(silent=True) or {}
-    email = str(data.get("email", "")).strip().lower()
-    generic = {"ok": True, "message": "If that email is registered, a protected password-reset request has been created for Developer/Admin review."}
-    if not email or "@" not in email: return jsonify(generic), 200
-    user = find_user(email)
-    if not user: return jsonify(generic), 200
-    requests = load_json(FILES["password_resets"])
-    requests = [x for x in requests if not (x.get("email") == email and x.get("status") == "pending")]
-    requests.append({"id": str(uuid.uuid4()),"email": email,"user_id": user.get("id"),"requested_at": iso_now(),"status": "pending"})
-    save_json(FILES["password_resets"], requests[-500:])
-    return jsonify(generic), 200
-
-@app.route("/api/admin/password-reset-requests")
-@require_dev
-def admin_password_reset_requests():
-    requests = load_json(FILES["password_resets"])
-    return jsonify({"ok": True, "requests": [x for x in requests if x.get("status") == "pending"][-100:]})
-
-@app.route("/api/admin/password-reset", methods=["POST"])
-@require_dev
-def admin_password_reset():
-    data = request.get_json(silent=True) or {}
-    email = str(data.get("email", "")).strip().lower()
-    password = str(data.get("password", ""))
-    if not email or len(password) < 8: return jsonify({"ok": False, "error": "Email and a password of at least 8 characters are required"}), 400
-    found = find_user(email)
-    if not found: return jsonify({"ok": False, "error": "Account not found"}), 404
-    found["password"] = generate_password_hash(password)
-    upsert_record("users", email, found)
-    requests = load_json(FILES["password_resets"])
-    for item in requests:
-        if item.get("email") == email and item.get("status") == "pending":
-            item["status"] = "completed"; item["completed_at"] = iso_now()
-    save_json(FILES["password_resets"], requests[-500:])
-    return jsonify({"ok": True, "email": email})
-
-# -----------------------------------------------------------------------------
-# CLIENT LIVE LOCATION
-# -----------------------------------------------------------------------------
-def validate_coordinates(data):
-    try:
-        lat = float(data.get("lat")); lng = float(data.get("lng", data.get("lon")))
-    except: return None
-    if not (-90 <= lat <= 90 and -180 <= lng <= 180): return None
-    return lat, lng
-
-@app.route("/api/location/update", methods=["POST"])
-@require_user
-def location_update(user):
-    data = request.get_json(silent=True) or {}
-    coords = validate_coordinates(data)
-    if not coords: return jsonify({"ok": False, "error": "Valid lat and lng are required"}), 400
-    subject_id = user.get("id")
-    record = {"id": str(uuid.uuid4()),"user_id": subject_id,"email": user.get("email"),"name": user.get("name", ""),"role": user.get("role"),"lat": coords[0],"lng": coords[1],"accuracy": data.get("accuracy"),"heading": data.get("heading"),"speed": data.get("speed"),"time": iso_now()}
-    upsert_record(LATEST_LOCATION_COLLECTION, subject_id, record)
-    append_record("locations_history", record, max_rows=10000)
-    if user.get("role") == "client":
-        socketio.emit("client_location_update", record, room="patrollers_room")
-    elif user.get("role") == "patroller":
-        socketio.emit("patroller_location_update", record, room="patrollers_room")
-    return jsonify({"ok": True, "location": record})
-
-@app.route("/api/location/live")
-@require_patroller
-def location_live(user):
-    locations = load_collection(LATEST_LOCATION_COLLECTION)
-    cutoff = now_utc() - timedelta(seconds=CLIENT_LIVE_WINDOW_SECONDS)
-    latest = []
-    for record in locations:
-        if record.get("role")!= "client": continue
-        timestamp = parse_time(record.get("time"))
-        if not timestamp: continue
-        item = dict(record); item["last_seen"] = record.get("time"); item["live"] = timestamp >= cutoff
-        latest.append(item)
-    latest.sort(key=lambda x: x.get("last_seen", ""), reverse=True)
-    return jsonify(latest)
-
-@app.route("/api/location/<user_id>")
-@require_user
-def location_history(user, user_id):
-    if user.get("role") == "client" and user.get("id")!= user_id: return jsonify({"ok": False, "error": "Forbidden"}), 403
-    if user.get("role") not in {"client", "patroller"}: return jsonify({"ok": False, "error": "Forbidden"}), 403
-    records = [x for x in load_collection("locations_history") if x.get("user_id") == user_id]
-    return jsonify(records[-100:])
-
-# -----------------------------------------------------------------------------
-# SOS
-# -----------------------------------------------------------------------------
-@app.route("/api/sos", methods=["POST"])
-@require_user
-def api_sos(user):
-    data = request.get_json(silent=True) or {}
-    coords = validate_coordinates(data) if ("lat" in data or "lng" in data or "lon" in data) else None
-    event = {**data,"id": str(uuid.uuid4()),"email": user.get("email"),"name": user.get("name", ""),"user_id": user.get("id"),"time": iso_now(),"status": "active"}
-    if coords: event["lat"], event["lng"] = coords
-    feed = load_json(FILES["sos"]); feed.append(event); save_json(FILES["sos"], feed[-1000:])
-    socketio.emit("new_sos", event, room="patrollers_room")
-    return jsonify({"ok": True, "id": event["id"]})
-
-@app.route("/api/sos-feed")
-@require_patroller
-def api_sos_feed(user): return jsonify(load_json(FILES["sos"])[-300:])
-
-@app.route("/api/sos/<sos_id>/resolve", methods=["POST"])
-@require_patroller
-def resolve_sos(user, sos_id):
-    feed = load_json(FILES["sos"])
-    found = None
-    for event in feed:
-        if event.get("id") == sos_id:
-            event["status"] = "resolved"; event["resolved_by"] = user.get("email"); event["resolved_at"] = iso_now(); found = event; break
-    if not found: return jsonify({"ok": False, "error": "SOS not found"}), 404
-    save_json(FILES["sos"], feed)
-    socketio.emit("sos_resolved", found, room="patrollers_room")
-    return jsonify({"ok": True, "sos": found})
-
-@app.route("/api/tracking/<phone_id>")
-@require_patroller
-def api_tracking(user, phone_id):
-    feed = load_json(FILES["sos"])
-    return jsonify([x for x in feed if x.get("phoneId") == phone_id and x.get("lat")][-100:])
-
-# -----------------------------------------------------------------------------
-# PATROLLER LIVE STATUS
-# -----------------------------------------------------------------------------
-@app.route("/api/patroller-ping", methods=["POST"])
-@require_patroller
-def patroller_ping(user):
-    data = request.get_json(silent=True) or {}
-    coords = validate_coordinates(data)
-    if not coords: return jsonify({"ok": False, "error": "Valid lat and lng are required"}), 400
-    record = {**data,"id": user.get("id"),"email": user.get("email"),"name": user.get("name", ""),"role": "patroller","lat": coords[0],"lng": coords[1],"time": iso_now()}
-    upsert_record(LATEST_PATROLLER_COLLECTION, user.get("id"), record)
-    socketio.emit("patroller_update", record, room="patrollers_room")
-    return jsonify({"ok": True, "patroller": record})
-
-@app.route("/api/patrollers-live")
-@require_patroller
-def patrollers_live(user):
-    cutoff = now_utc() - timedelta(minutes=5)
-    result = []
-    for record in load_json(FILES["patrollers"]):
-        timestamp = parse_time(record.get("time"))
-        if timestamp and timestamp >= cutoff: result.append(record)
-    return jsonify(result)
-
-# -----------------------------------------------------------------------------
-# QR / SCAN
-# -----------------------------------------------------------------------------
-@app.route("/api/scans", methods=["POST"])
-@app.route("/api/scans", methods=["POST"])
-@require_patroller
-def create_scan(user):
-    data = request.get_json(silent=True) or {}
-    # support both old sticker_id and new code from OS launcher
-    sticker_id = str(data.get("sticker_id") or data.get("code") or "").strip()
-    if not sticker_id:
-        return jsonify({"ok": False, "error": "Missing sticker_id/code"}), 400
-    
-    lat = data.get("lat")
-    lng = data.get("lng")
-    acc = data.get("acc")
-    officer_email = data.get("officer") or user.get("email")
-    officer_name = data.get("officer_name") or user.get("name") or officer_email
-
-    record = {
-        "id": str(uuid.uuid4()),
-        "sticker_id": sticker_id,
-        "code": sticker_id,
-        "lat": lat,
-        "lng": lng,
-        "accuracy": acc,
-        "officer": officer_email,
-        "officer_name": officer_name,
-        "patroller_id": user.get("id") or user.get("email"),
-        "time": data.get("time") or datetime.utcnow().isoformat() + "Z",
-        "timestamp": now_utc().isoformat(),
-        "source": data.get("source") or "zondi-os-qr-nfc"
+// --- SCANNER FIXED - NO POPUP, TABS SAFE ---
+let lastScanData=null,lastPos=null;
+window.startScanner=async mode=>{
+  const div=$('scanner');
+  if(mode==='nfc'){
+    const btn=$('nfcBtn');
+    try{
+      if(!('NDEFReader' in window)) throw new Error('No API');
+      const r=new NDEFReader(); await r.scan();
+      $('lastScan').textContent='Hold to NFC tag...';
+      r.onreading=e=>{ lastScanData=e.serialNumber||('NFC-'+Date.now()); $('lastScan').textContent='NFC: '+lastScanData; navigator.geolocation.getCurrentPosition(p=>{ lastPos=p; $('scanMeta').textContent=new Date().toLocaleString()+' • GPS '+p.coords.latitude.toFixed(5); }); };
+      return;
+    }catch(err){
+      console.log('NFC unsupported',err.message);
+      if(btn){ btn.style.opacity='0.25'; btn.style.pointerEvents='none'; btn.textContent='🚫 NFC N/A'; }
+      $('lastScan').textContent='NFC not available on this device — using QR';
+      mode='qr';
     }
-    append_record("scans", record, max_rows=2000)
-    
-    # optional: live emit to admin
-    try:
-        socketio.emit("new_scan", record)
-    except:
-        pass
-        
-    return jsonify({"ok": True, "scan": record})
+  }
+  // QR
+  try{
+    if(typeof Html5Qrcode==='undefined'){ div.innerHTML='<div style="padding:30px;text-align:center">QR lib failed to load<br>Check internet</div>'; return; }
+    div.innerHTML='<div id="reader" style="width:100%"></div>';
+    const qr=new Html5Qrcode('reader');
+    qr.start({facingMode:'environment'},{fps:10,qrbox:250},decoded=>{
+      lastScanData=decoded; $('lastScan').textContent='QR: '+decoded; $('scanMeta').textContent=new Date().toLocaleString()+' • '+me.name;
+      navigator.geolocation.getCurrentPosition(p=>{ lastPos=p; $('scanMeta').textContent+=' • '+p.coords.latitude.toFixed(5)+','+p.coords.longitude.toFixed(5); });
+      try{qr.stop();}catch{} const rd=document.getElementById('reader'); if(rd) rd.remove();
+    },()=>{});
+  }catch(e){ div.innerHTML='Camera permission needed'; }
+};
 
-@app.route("/api/scans")
-@require_dev
-def list_scans(): return jsonify(load_json(FILES["scans"])[-500:])
+window.uploadScan=async()=>{
+  if(!lastScanData){alert('Scan first');return;}
+  if(!lastPos){alert('Waiting GPS...');return;}
+  try{
+    await fetch('/api/patrol-scan',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,acc:lastPos.coords.accuracy,officer:me.email,time:new Date().toISOString()})});
+    alert('Patrol point logged ✅'); closeViews();
+  }catch(e){ localStorage.setItem('zondi_pending_scan',JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,time:Date.now()})); alert('Saved offline - will sync'); }
+};
 
-# -----------------------------------------------------------------------------
-# HTTP RADIO TEXT
-# -----------------------------------------------------------------------------
-@app.route("/api/radio/talk", methods=["POST", "GET"])
-@require_patroller
-def radio_http(user):
-    if request.method == "POST":
-        data = request.get_json(silent=True) or {}
-        channel = str(data.get("channel", "1"))
-        message = str(data.get("message", data.get("text", ""))).strip()
-        if not message: return jsonify({"ok": False, "error": "message required"}), 400
-        record = {"id": str(uuid.uuid4()),"channel": channel,"email": user.get("email"),"name": user.get("name", ""),"message": message,"time": iso_now()}
-        append_record("radio", record, max_rows=500)
-        socketio.emit("text_message", record, room=f"channel_{channel}")
-        return jsonify({"ok": True, "message": record})
-    channel = request.args.get("channel")
-    feed = load_json(FILES["radio"])[-50:]
-    if channel is not None: feed = [x for x in feed if str(x.get("channel")) == str(channel)]
-    return jsonify(feed)
-
-# -----------------------------------------------------------------------------
-# SOCKET.IO PTT
-# -----------------------------------------------------------------------------
-def socket_user_from_auth(data):
-    data = data or {}
-    token = str(data.get("token", ""))
-    payload = read_token(token, "user", USER_TOKEN_MAX_AGE)
-    if payload:
-        user = find_user(payload.get("sub"))
-        if user and user.get("role") == "patroller" and user.get("status") == "approved": return user
-    return None
-
-@socketio.on("connect")
-def socket_connect(auth=None):
-    user = socket_user_from_auth(auth)
-    if not user: return False
-    socket_channels[request.sid] = set()
-    join_room("patrollers_room")
-    emit("connected", {"ok": True, "email": user.get("email"), "name": user.get("name", "")})
-
-@socketio.on("disconnect")
-def socket_disconnect():
-    sid = request.sid
-    with channel_lock:
-        for channel, owner in list(active_talkers.items()):
-            if owner.get("sid") == sid:
-                del active_talkers[channel]
-                socketio.emit("ptt_ended", {"channel": channel, "email": owner.get("email"), "sid": sid}, room=f"channel_{channel}")
-        for channel, members in list(channel_members.items()):
-            if sid in members: members.pop(sid, None)
-            if not members: channel_members.pop(channel, None)
-        socket_channels.pop(sid, None)
-
-@socketio.on("join_channel")
-def handle_join(data):
-    user = socket_user_from_auth((data or {}).get("auth", data or {}))
-    if not user: emit("error", {"error": "Approved patroller authentication required"}); return
-    channel = str((data or {}).get("channel", "1")); room = f"channel_{channel}"
-    join_room(room); socket_channels.setdefault(request.sid, set()).add(channel)
-    with channel_lock:
-        members = channel_members.setdefault(channel, {})
-        peers = [dict(info, sid=sid) for sid, info in members.items() if sid!= request.sid]
-        members[request.sid] = {"email": user.get("email", ""), "name": user.get("name", "")}
-    emit("channel_joined", {"channel": channel, "email": user.get("email"), "name": user.get("name", ""), "sid": request.sid})
-    emit("radio_peers", {"channel": channel, "peers": peers})
-    emit("user_joined_channel", {"channel": channel, "email": user.get("email"), "name": user.get("name", ""), "sid": request.sid}, room=room, include_self=False)
-
-@socketio.on("leave_channel")
-def handle_leave(data):
-    channel = str((data or {}).get("channel", "1"))
-    leave_room(f"channel_{channel}")
-    socket_channels.setdefault(request.sid, set()).discard(channel)
-    with channel_lock:
-        members = channel_members.get(channel, {})
-        members.pop(request.sid, None)
-        if not members: channel_members.pop(channel, None)
-    emit("user_left_channel", {"channel": channel, "sid": request.sid}, room=f"channel_{channel}")
-    with channel_lock:
-        owner = active_talkers.get(channel)
-        if owner and owner.get("sid") == request.sid:
-            del active_talkers[channel]
-            emit("ptt_ended", {"channel": channel, "email": owner.get("email"), "sid": request.sid}, room=f"channel_{channel}")
-
-@socketio.on("ptt_start")
-def handle_ptt_start(data):
-    data = data or {}
-    user = socket_user_from_auth(data.get("auth", data))
-    if not user: emit("ptt_denied", {"reason": "authentication required"}); return
-    channel = str(data.get("channel", "1"))
-    if channel not in socket_channels.get(request.sid, set()): emit("ptt_denied", {"reason": "join the channel first", "channel": channel}); return
-    with channel_lock:
-        current = active_talkers.get(channel)
-        if current:
-            age = (now_utc() - current["started_at"]).total_seconds()
-            if age < 30: emit("channel_busy", {"channel": channel, "busy_by": current["email"]}); return
-            del active_talkers[channel]
-        active_talkers[channel] = {"sid": request.sid,"email": user.get("email"),"started_at": now_utc()}
-    emit("ptt_started", {"channel": channel, "email": user.get("email"), "name": user.get("name", ""), "sid": request.sid}, room=f"channel_{channel}")
-    emit("ptt_granted", {"channel": channel, "sid": request.sid})
-
-@socketio.on("ptt_audio")
-def handle_ptt_audio(data): emit("ptt_denied", {"reason": "Legacy audio chunks are disabled; use the WebRTC radio client."})
-
-def _valid_radio_peer(channel, sid): return sid in channel_members.get(channel, {})
-
-@socketio.on("webrtc_offer")
-def handle_webrtc_offer(data):
-    data = data or {}
-    user = socket_user_from_auth(data.get("auth", data))
-    target = str(data.get("target", "")); channel = str(data.get("channel", "1"))
-    if not user or not _valid_radio_peer(channel, target): emit("webrtc_error", {"reason": "Invalid radio peer or authentication"}); return
-    with channel_lock: owner = active_talkers.get(channel)
-    if not owner or owner.get("sid")!= request.sid: emit("webrtc_error", {"reason": "Only the current talker may send an offer"}); return
-    socketio.emit("webrtc_offer", {"channel": channel, "from": request.sid, "name": user.get("name", ""), "email": user.get("email", ""), "description": data.get("description")}, to=target)
-
-@socketio.on("webrtc_answer")
-def handle_webrtc_answer(data):
-    data = data or {}
-    user = socket_user_from_auth(data.get("auth", data))
-    target = str(data.get("target", "")); channel = str(data.get("channel", "1"))
-    if not user or not _valid_radio_peer(channel, target): emit("webrtc_error", {"reason": "Invalid radio peer or authentication"}); return
-    with channel_lock: owner = active_talkers.get(channel)
-    if not owner or owner.get("sid")!= target: emit("webrtc_error", {"reason": "Answer target is not the current talker"}); return
-    socketio.emit("webrtc_answer", {"channel": channel, "from": request.sid, "description": data.get("description")}, to=target)
-
-@socketio.on("webrtc_ice")
-def handle_webrtc_ice(data):
-    data = data or {}
-    user = socket_user_from_auth(data.get("auth", data))
-    target = str(data.get("target", "")); channel = str(data.get("channel", "1"))
-    if not user or not _valid_radio_peer(channel, target): return
-    with channel_lock: owner = active_talkers.get(channel)
-    if not owner or request.sid!= owner.get("sid") and target!= owner.get("sid"): return
-    socketio.emit("webrtc_ice", {"channel": channel, "from": request.sid, "candidate": data.get("candidate")}, to=target)
-
-@socketio.on("ptt_end")
-def handle_ptt_end(data):
-    data = data or {}
-    user = socket_user_from_auth(data.get("auth", data))
-    if not user: emit("ptt_denied", {"reason": "authentication required"}); return
-    channel = str(data.get("channel", "1")); released = False
-    with channel_lock:
-        owner = active_talkers.get(channel)
-        if owner and owner.get("sid") == request.sid: del active_talkers[channel]; released = True
-    if released:
-        emit("ptt_ended", {"channel": channel, "email": user.get("email")}, room=f"channel_{channel}")
-        emit("ptt_released", {"channel": channel})
-
-# -----------------------------------------------------------------------------
-# HEALTH
-# -----------------------------------------------------------------------------
-@app.route("/api/health")
-def api_health():
-    try:
-        with Session(engine) as db: db.execute(select(1))
-        return jsonify({"ok": True, "service": "zondi", "database": "connected"})
-    except Exception:
-        return jsonify({"ok": False, "service": "zondi", "database": "unavailable"}), 503
-
-@app.errorhandler(404)
-def not_found(error):
-    if request.path.startswith("/api/"): return jsonify({"ok": False, "error": "Not found"}), 404
-    return error
-@app.errorhandler(500)
-def internal_error(error): return jsonify({"ok": False, "error": "Internal server error"}), 500
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    socketio.run(app, host="0.0.0.0", port=port)
+// --- OTHER APPS SAFE ---
+try{
+  const TOOLS=[{id:'com.flashlight.torch',name:'Super Torch',cat:'security',icon:'🔦'},{id:'com.melstudio.gpstest',name:'GPS Test',cat:'security',icon:'🛰️'},{id:'com.google.android.apps.translate',name:'Translate',cat:'security',icon:'🌍'},{id:'com.weather.forecast',name:'Weather Radar',cat:'security',icon:'⛅'},{id:'com.firstaid.app',name:'First Aid',cat:'security',icon:'🩺'},{id:'com.secure.notes',name:'Secure Notes',cat:'security',icon:'📝'},{id:'com.candy.crush',name:'Candy Crush',cat:'game',icon:'🍬'},{id:'com.tiktok.a',name:'TikTok',cat:'social',icon:'🎵'}];
+  $('storeGrid').innerHTML=TOOLS.map(t=>{ const blocked=['game','social','music'].includes(t.cat); return `<div class="store-card ${blocked?'blocked':''}"><div style="font-size:26px">${t.icon}</div><div style="font-weight:700;font-size:12px;margin-top:4px">${t.name}</div><div style="font-size:10px;opacity:.5">${t.cat.toUpperCase()}</div>${blocked?`<div style="margin-top:8px;color:#ff6b6b;font-size:11px">⛔ Blocked by ZONDI policy</div>`:`<button class="btn" style="margin-top:8px;width:100%;background:#0a84ff" onclick="window.open('https://play.google.com/store/apps/details?id=${t.id}','_blank')">Install</button>`}</div>` }).join('');
+}catch{}
+try{ $('chromeSearch').addEventListener('keydown',e=>{ if(e.key==='Enter'){ let q=e.target.value.toLowerCase(); if(/game|tiktok|instagram|facebook|porn|bet|casino/i.test(q)){alert('Blocked by ZONDI policy');return;} $('chromeFrame').src='https://www.google.com/search?igu=1&q='+encodeURIComponent(q); } }); }catch{}
+window.toggleTorch=async()=>{ try{ const s=await navigator.mediaDevices.getUserMedia({video:{torch:true}}); const tr=s.getVideoTracks()[0]; const cap=tr.getCapabilities(); if(cap.torch){ const cur=tr.getSettings().torch; await tr.applyConstraints({advanced:[{torch:!cur}]}); setTimeout(()=>tr.stop(),5000);} else alert('Torch not supported'); }catch(e){alert('Torch needs camera permission');} };
+window.submitIncident=async()=>{ let t=$('incidentText').value; if(!t)return; await fetch('/api/incident',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({text:t,lat:lastPos?.coords.latitude,lng:lastPos?.coords.longitude})}); alert('Incident logged'); closeViews(); };
+$('logout').onclick=()=>{sessionStorage.clear();localStorage.clear();location.href='/login';};
+load(); setInterval(load,15000);
+</script></body></html>
