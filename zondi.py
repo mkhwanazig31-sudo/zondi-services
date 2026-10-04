@@ -506,13 +506,43 @@ def patrollers_live(user):
 # QR / SCAN
 # -----------------------------------------------------------------------------
 @app.route("/api/scans", methods=["POST"])
+@app.route("/api/scans", methods=["POST"])
 @require_patroller
 def create_scan(user):
     data = request.get_json(silent=True) or {}
-    sticker_id = str(data.get("sticker_id", "")).strip()
-    if not sticker_id: return jsonify({"ok": False, "error": "sticker_id required"}), 400
-    record = {"id": str(uuid.uuid4()),"sticker_id": sticker_id,"patroller_id": user.get("id"),"patroller_email": user.get("email"),"time": iso_now(),"lat": data.get("lat"),"lng": data.get("lng"),"note": str(data.get("note", "")).strip()}
+    # support both old sticker_id and new code from OS launcher
+    sticker_id = str(data.get("sticker_id") or data.get("code") or "").strip()
+    if not sticker_id:
+        return jsonify({"ok": False, "error": "Missing sticker_id/code"}), 400
+    
+    lat = data.get("lat")
+    lng = data.get("lng")
+    acc = data.get("acc")
+    officer_email = data.get("officer") or user.get("email")
+    officer_name = data.get("officer_name") or user.get("name") or officer_email
+
+    record = {
+        "id": str(uuid.uuid4()),
+        "sticker_id": sticker_id,
+        "code": sticker_id,
+        "lat": lat,
+        "lng": lng,
+        "accuracy": acc,
+        "officer": officer_email,
+        "officer_name": officer_name,
+        "patroller_id": user.get("id") or user.get("email"),
+        "time": data.get("time") or datetime.utcnow().isoformat() + "Z",
+        "timestamp": now_utc().isoformat(),
+        "source": data.get("source") or "zondi-os-qr-nfc"
+    }
     append_record("scans", record, max_rows=2000)
+    
+    # optional: live emit to admin
+    try:
+        socketio.emit("new_scan", record)
+    except:
+        pass
+        
     return jsonify({"ok": True, "scan": record})
 
 @app.route("/api/scans")
