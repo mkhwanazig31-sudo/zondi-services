@@ -128,35 +128,40 @@ def radio_feed():
     return jsonify(filtered[-10:])
 
 # --- STATIC (FIX 2: safe file serving) ---
-def safe_send(file):
-    try:
-        if os.path.exists(file):
-            return send_from_directory('.', file)
-        return jsonify({'error': f'{file} not found on server'}), 404
-    except Exception as e:
-        print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+# --- STATIC - LINKED - FIX FOR HTMLS NOT LINKED ---
+import pathlib
+BASE_DIR = pathlib.Path(__file__).parent.resolve()
+
+def safe_send(filename):
+    file_path = BASE_DIR / filename
+    if file_path.exists():
+        return send_from_directory(str(BASE_DIR), filename)
+    return jsonify({'error': f'{filename} missing at {file_path}'}), 404
 
 @app.route('/')
 def index(): return safe_send('index.html')
+
 @app.route('/patrol')
-def patrol(): return safe_send('patrol.html')
 @app.route('/patrol.html')
-def patrol2(): return safe_send('patrol.html')
+def patrol(): return safe_send('patrol.html')
+
 @app.route('/login')
-def login_page(): return safe_send('login.html')
 @app.route('/login.html')
-def login_page2(): return safe_send('login.html')
+def login_page(): return safe_send('login.html')
+
 @app.route('/assets/<path:path>')
-def assets(path): return safe_send(f'assets/{path}')
+def assets(path):
+    return send_from_directory(str(BASE_DIR / 'assets'), path)
 
 @app.route('/<path:path>')
 def catch_all(path):
-    if os.path.exists(path):
-        return send_from_directory('.', path)
-    # if file not found, return index if exists else json (no crash)
-    if os.path.exists('index.html'):
-        return send_from_directory('.', 'index.html')
-    return jsonify({'ok':True, 'msg':'Zondi API running', 'path':path})
+    if path.startswith('api/'):
+        return jsonify({'error':'api not found'}), 404
+    full = BASE_DIR / path
+    if full.exists() and full.is_file():
+        return send_from_directory(str(BASE_DIR), path)
+    if (BASE_DIR / 'index.html').exists():
+        return send_from_directory(str(BASE_DIR), 'index.html')
+    return jsonify({'status':'ZONDI API running'}), 200
 
 # Vercel requires app variable
