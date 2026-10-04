@@ -1,4 +1,4 @@
-import os, pathlib, secrets
+import os, pathlib, secrets, json
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
@@ -13,16 +13,53 @@ BASE_DIR = pathlib.Path(__file__).parent.resolve()
 SECRET = os.getenv('JWT_SECRET', 'zondi-secret-2026-change-me')
 DEV_PASS = os.getenv('DEV_PORTAL_PASSWORD', os.getenv('DEV_PASSWORD', ''))
 
-# --- IN-MEMORY DB (works on Vercel, no Postgres needed) ---
+# --- PERSISTENT DB FIX FOR VERCEL ---
+DB_FILE = BASE_DIR / "zondi_db.json"
+TMP_DB = pathlib.Path("/tmp/zondi_db.json")
+
+def load_db():
+    global USERS, PATROLLERS, LOCATIONS, SOS_EVENTS, RESET_REQUESTS
+    data = None
+    for f in [DB_FILE, TMP_DB]:
+        if f.exists():
+            try:
+                data = json.loads(f.read_text())
+                break
+            except: pass
+    if data:
+        USERS = data.get("USERS", USERS)
+        PATROLLERS = data.get("PATROLLERS", PATROLLERS)
+        LOCATIONS = data.get("LOCATIONS", {})
+        SOS_EVENTS = data.get("SOS_EVENTS", [])
+        RESET_REQUESTS = data.get("RESET_REQUESTS", [])
+
+def save_db():
+    try:
+        data = {
+            "USERS": USERS,
+            "PATROLLERS": PATROLLERS,
+            "LOCATIONS": LOCATIONS,
+            "SOS_EVENTS": SOS_EVENTS[-50:],
+            "RESET_REQUESTS": RESET_REQUESTS[-50:]
+        }
+        # try both places
+        for f in [DB_FILE, TMP_DB]:
+            try:
+                f.write_text(json.dumps(data))
+            except: pass
+    except Exception as e:
+        print("save_db failed", e)
+
+# --- IN-MEMORY DB (loaded from file) ---
 USERS = {
     'client@test.com': {'email':'client@test.com','name':'Test Client','role':'client','password':generate_password_hash('12345678'), 'status':'active'},
 }
-PATROLLERS = [
-    # example pending to test admin
-]
-LOCATIONS = {} # email -> {lat,lng,...}
+PATROLLERS = []
+LOCATIONS = {}
 SOS_EVENTS = []
 RESET_REQUESTS = []
+
+load_db()
 
 # --- AUTH ---
 def make_token(user_dict):
@@ -66,15 +103,12 @@ def dev_auth_required(f):
         return f(*args, **kwargs)
     return wrapper
 
-# --- API ROUTES YOUR HTMLS CALL ---
-
 @app.route('/api/login', methods=['POST'])
 def api_login():
     data = request.get_json(force=True, silent=True) or {}
     email = str(data.get('email','')).lower().strip()
     pw = str(data.get('password',''))
 
-    # find user
     u = USERS.get(email)
     if not u:
         for p in PATROLLERS:
@@ -95,29 +129,31 @@ def api_login():
 def api_register():
     data = request.get_json(force=True, silent=True) or {}
     email = str(data.get('email','')).lower().strip()
-    name = str(data.get('name','')).strip()
+    name = str(data.get('name','') or data.get('fullName','')).strip()
     pw = str(data.get('password',''))
     role = str(data.get('role','client')).lower()
     phone = str(data.get('phone','')).strip()
 
     if not email or not pw or len(pw) < 6:
         return jsonify({'ok':False,'error':'Email and 6+ char password required'}), 400
-    if email in USERS or any(p['email']==email for p in PATROLLERS):
+    if email in USERS or any(p['email'].lower()==email for p in PATROLLERS):
         return jsonify({'ok':False,'error':'Email already registered'}), 400
 
     hashed = generate_password_hash(pw)
     if role == 'patroller':
         PATROLLERS.append({'email':email,'name':name or email,'role':'patroller','status':'pending','password':hashed,'phone':phone})
+        save_db()
         return jsonify({'ok':True,'message':'Patroller registered, pending approval'})
     else:
         USERS[email] = {'email':email,'name':name or email,'role':'client','status':'active','password':hashed,'phone':phone}
+        save_db()
         token = make_token(USERS[email])
         return jsonify({'ok':True,'token':token,'user':{'email':email,'name':name,'role':'client'}})
 
 @app.route('/api/dev-login', methods=['POST'])
 def api_dev_login():
     if not DEV_PASS:
-        return jsonify({'ok':False,'error':'Developer access is not configured on the server. Set DEV_PORTAL_PASSWORD in Render → Environment.'}), 503
+        return jsonify({'ok':False,'error':'Developer access is not configured on the server. Set DEV_PORTAL_PASSWORD in Vercel → Environment.'}), 503
     data = request.get_json(force=True, silent=True) or {}
     if str(data.get('password',''))!= DEV_PASS:
         return jsonify({'ok':False,'error':'Wrong developer password'}), 401
@@ -141,7 +177,7 @@ def api_dev_logout():
 @auth_required
 def loc_update():
     data = request.get_json(force=True, silent=True) or {}
-    email = request.user_data['email']
+    email = request.user_data['email'].lower()
     LOCATIONS[email] = {
         'email': email,
         'name': request.user_data.get('name',''),
@@ -152,12 +188,12 @@ def loc_update():
         'speed': data.get('speed'),
         'updated_at': datetime.utcnow().isoformat()
     }
+    save_db()
     return jsonify({'ok':True})
 
 @app.route('/api/location/live')
 @auth_required
 def loc_live():
-    # only patroller + dev can see all
     if request.user_data.get('role') not in ['patroller','dev']:
         return jsonify({'ok':False,'error':'Patrol only'}), 403
     return jsonify({'ok':True,'locations': list(LOCATIONS.values()), 'sos': SOS_EVENTS[-10:]})
@@ -173,9 +209,29 @@ def api_sos():
         'lng': data.get('lng'),
         'time': datetime.utcnow().isoformat()
     })
+    save_db()
     return jsonify({'ok':True})
 
-# --- ADMIN ---
+@app.route('/api/sos-feed')
+@auth_required
+def sos_feed():
+    return jsonify(SOS_EVENTS)
+
+@app.route('/api/patrol-scan', methods=['POST'])
+@auth_required
+def patrol_scan():
+    return jsonify({'ok':True})
+
+@app.route('/api/incident', methods=['POST'])
+@auth_required
+def incident():
+    return jsonify({'ok':True})
+
+@app.route('/api/patroller-ping', methods=['POST'])
+@auth_required
+def patroller_ping():
+    return loc_update()
+
 @app.route('/api/admin/pending')
 @dev_auth_required
 def admin_pending():
@@ -197,6 +253,7 @@ def admin_approve():
                 break
             elif action == 'revoke':
                 p['status']='pending'
+    save_db()
     return jsonify({'ok':True})
 
 @app.route('/api/admin/password-reset-requests')
@@ -218,58 +275,42 @@ def admin_reset_do():
     for p in PATROLLERS:
         if p['email'].lower()==email:
             p['password']=h
+    save_db()
     return jsonify({'ok':True})
 
 @app.route('/api/forgot-password', methods=['POST'])
 def forgot_api():
     data = request.get_json(force=True, silent=True) or {}
     email = str(data.get('email','')).lower().strip()
-    # hide existence
     RESET_REQUESTS.append({'email':email,'status':'pending','requested_at':datetime.utcnow().isoformat()})
+    save_db()
     return jsonify({'ok':True,'message':'If account exists, request sent to admin'})
 
-# --- STATIC SERVING - LINKED TO YOUR FILENAMES ---
 def safe_send(filename):
     fp = BASE_DIR / filename
     if fp.exists() and fp.is_file():
         return send_from_directory(str(BASE_DIR), filename)
-    return jsonify({'error': f'{filename} not found. Check GitHub root.'}), 404
+    return jsonify({'error': f'{filename} not found.'}), 404
 
 @app.route('/')
-def root():
-    return safe_send('index.html')
-
+def root(): return safe_send('index.html')
 @app.route('/dashboard')
-def dashboard_route():
-    # your dashboard.html is actually the new dashboard, but index.html is also dashboard
-    if (BASE_DIR / 'dashboard.html').exists() and (BASE_DIR / 'index.html').exists():
-        # index.html is the dashboard design you sent me, so serve it
-        return safe_send('index.html')
-    if (BASE_DIR / 'dashboard.html').exists():
-        return safe_send('dashboard.html')
-    return safe_send('index.html')
-
+def dashboard_route(): return safe_send('index.html')
 @app.route('/login')
 def login_route(): return safe_send('login.html')
-
 @app.route('/clients')
 def clients_route(): return safe_send('clients.html')
-
 @app.route('/patrol')
 def patrol_route(): return safe_send('patrol.html')
-
 @app.route('/dev')
 def dev_route():
     if (BASE_DIR / 'dev.html').exists(): return safe_send('dev.html')
     if (BASE_DIR / 'dev_portal.html').exists(): return safe_send('dev_portal.html')
     return safe_send('index.html')
-
 @app.route('/register')
 def register_route(): return safe_send('register.html')
-
 @app.route('/forgot-password')
 def forgot_route(): return safe_send('forgot-password.html')
-
 @app.route('/assets/<path:path>')
 def assets_route(path):
     for folder_name in ['assets', 'asset']:
@@ -278,16 +319,6 @@ def assets_route(path):
         if fp.exists() and fp.is_file():
             return send_from_directory(str(folder), path)
     return jsonify({'error': f'Asset {path} not found'}), 404
-
-@app.route('/api/debug-assets')
-def debug_assets():
-    import os
-    asset_dir = BASE_DIR / 'assets'
-    files = []
-    if asset_dir.exists():
-        files = os.listdir(str(asset_dir))
-    return jsonify({'exists': asset_dir.exists(), 'files': files})
-# catch-all for any other.html file directly
 @app.route('/<path:filename>')
 def catch_all(filename):
     if filename.startswith('api/'):
@@ -295,7 +326,6 @@ def catch_all(filename):
     p = BASE_DIR / filename
     if p.exists() and p.is_file():
         return send_from_directory(str(BASE_DIR), filename)
-    # SPA fallback
     if (BASE_DIR / 'index.html').exists():
         return send_from_directory(str(BASE_DIR), 'index.html')
     return jsonify({'ok':True,'msg':'ZONDI API running'}), 200
