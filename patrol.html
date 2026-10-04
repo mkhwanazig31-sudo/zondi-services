@@ -63,7 +63,7 @@ body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;
 <div id="radioFeed" style="margin-top:12px"></div></div></div>
 
 <div class="view" id="qrView"><div class="view-head"><b>📷 Patrol Scanner • QR + NFC</b><button class="btn" onclick="closeViews()">✕</button></div>
-<div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn gold" onclick="startScanner('qr')">QR Checkpoint</button><button class="btn" onclick="startScanner('nfc')">NFC Tap</button><button class="btn" onclick="startScanner('id')">ID / Visitor</button></div>
+<div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn gold" onclick="startScanner('qr')">QR Checkpoint</button><button class="btn" id="nfcBtn" onclick="startScanner('nfc')">NFC Tap</button><button class="btn" onclick="startScanner('id')">ID / Visitor</button></div>
 <div id="scanner"><div style="opacity:.4;text-align:center">📷<br>Tap QR to start<br><small>YANTON side button also works</small></div></div>
 <div style="margin-top:12px;background:#111;border:1px solid #222;border-radius:12px;padding:12px"><div style="font-size:11px;opacity:.6">LAST SCAN</div><div id="lastScan" style="font-size:13px;margin-top:4px">No scan yet</div><div id="scanMeta" style="font-size:11px;opacity:.5;margin-top:4px"></div></div>
 <button class="btn gold" style="width:100%;margin-top:12px;padding:14px" onclick="uploadScan()">✅ Confirm Patrol Point</button>
@@ -93,7 +93,7 @@ setInterval(()=>{$('clock').textContent=new Date().toLocaleTimeString()+' • ZO
 window.openView=id=>{document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active'); if(id==='mapView') setTimeout(()=>map.invalidateSize(),350);}
 window.closeViews=()=>document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
 
-// MAP - kept from your old script
+// MAP
 const map=L.map('map',{maxZoom:20,minZoom:3}).setView([-26.171,27.86],18);
 const street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19});const sat=L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{subdomains:['mt0','mt1','mt2','mt3'],maxZoom:20});street.addTo(map);
 let isSat=false;$('sat').onclick=()=>{if(!isSat){map.removeLayer(street);sat.addTo(map);$('sat').textContent='🗺️ Street';isSat=true;}else{map.removeLayer(sat);street.addTo(map);$('sat').textContent='🛰️ Satellite';isSat=false;}};
@@ -126,7 +126,6 @@ qr.stop(); document.getElementById('reader').remove();
 window.uploadScan=async()=>{
 if(!lastScanData){alert('Scan first');return;}
 if(!lastPos){alert('Waiting GPS...');return;}
-// anti-fake: must be within 150m of client if checkpoint
 try{
 await fetch('/api/patrol-scan',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,acc:lastPos.coords.accuracy,officer:me.email,time:new Date().toISOString()})});
 alert('Patrol point logged ✅'); closeViews();
@@ -159,4 +158,19 @@ window.submitIncident=async()=>{let t=$('incidentText').value;if(!t)return;await
 
 $('logout').onclick=()=>{sessionStorage.clear();localStorage.clear();location.href='/login';};
 load();setInterval(load,15000);
+
+// === FIX #1 NFC AUTO-HIDE ===
+(function(){
+  const btn = document.getElementById('nfcBtn');
+  if(!btn) return;
+  if(!('NDEFReader' in window)){
+    btn.style.opacity = '0.25';
+    btn.style.pointerEvents = 'none';
+    btn.innerHTML = '🚫 NFC N/A';
+    btn.title = 'NFC not supported on this device - YANTON only';
+  } else {
+    btn.innerHTML = '📡 NFC Tap • Ready';
+    btn.classList.add('gold');
+  }
+})();
 </script></body></html>
