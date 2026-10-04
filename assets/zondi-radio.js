@@ -1,227 +1,68 @@
-/* Zondi live radio transport: Socket.IO for control/signaling, WebRTC for audio. */
-(function () {
-  function esc(v) {
-    return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+// ZONDI RADIO FIXED v6.1 - Mic permission fix
+window.initZondiRadio = function({socket, token, user, statusElId, feedElId}){
+  const statusEl=document.getElementById(statusElId);
+  const feedEl=document.getElementById(feedElId);
+  const channelEl=document.getElementById('channel');
+  const pttBtn=document.getElementById('ptt');
+  let localStream=null, pcMap={}, isTalking=false;
+
+  const log=(m)=>{
+    const d=document.createElement('div'); d.className='mini';
+    d.textContent='['+new Date().toLocaleTimeString()+'] '+m;
+    d.style.padding='6px 0'; d.style.borderBottom='1px solid #222';
+    if(feedEl) feedEl.prepend(d);
+  };
+
+  async function ensureMic(){
+    if(localStream) return localStream;
+    try{
+      log('Requesting mic...');
+      localStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      log('Mic granted ✅'); statusEl.textContent='Online • Mic OK'; return localStream;
+    }catch(e){
+      log('Mic blocked ❌ '+e.message); statusEl.textContent='Mic blocked - allow in settings';
+      alert('Allow microphone then reload'); throw e;
+    }
   }
 
-  window.initZondiRadio = function ({ socket, token, user, channelElId='channel', pttElId='ptt', statusElId='radioStatus', feedElId='radioFeed' } = {}) {
-    const channelEl = document.getElementById(channelElId);
-    const pttEl = document.getElementById(pttElId);
-    const statusEl = document.getElementById(statusElId) || document.getElementById('status');
-    const feedEl = document.getElementById(feedElId) || document.getElementById('feed');
-    if (!socket || !token || !channelEl || !pttEl) return null;
+  function joinChannel(){
+    const ch=channelEl.value; socket.emit('join_channel',{channel:ch, auth:{token}});
+    log('Joining channel '+ch);
+  }
+  channelEl.addEventListener('change', joinChannel);
+  socket.on('connect',()=>{ statusEl.textContent='Online'; joinChannel(); ensureMic(); });
+  socket.on('channel_joined',d=>{ statusEl.textContent='Channel '+d.channel+' clear'; });
+  socket.on('ptt_granted',()=>{ statusEl.textContent='TALKING 🔴'; pttBtn.style.background='#22c55e'; isTalking=true; log('TALKING - speak now'); });
+  socket.on('ptt_ended',d=>{ statusEl.textContent='Channel '+d.channel+' clear'; pttBtn.style.background=''; isTalking=false; log('Channel clear'); });
+  socket.on('channel_busy',d=>{ log('Busy by '+d.busy_by); });
 
-    const auth = { token };
-    const peers = new Map();
-    const peerInfo = new Map();
-    const remoteAudio = new Map();
-    let localStream = null;
-    let pressed = false;
-    let requesting = false;
-    let talking = false;
-    let activeTalkerSid = null;
-    let currentChannel = String(channelEl.value || '1');
+  socket.on('webrtc_offer', async data=>{
+    await ensureMic();
+    const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+    localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+    pc.ontrack=ev=>{ const a=document.createElement('audio'); a.srcObject=ev.streams[0]; a.autoplay=true; document.body.appendChild(a); };
+    pc.onicecandidate=ev=>{ if(ev.candidate) socket.emit('webrtc_ice',{target:data.from, channel:data.channel, candidate:ev.candidate, auth:{token}}); };
+    await pc.setRemoteDescription(new RTCSessionDescription(data.description));
+    const ans=await pc.createAnswer(); await pc.setLocalDescription(ans);
+    socket.emit('webrtc_answer',{target:data.from, channel:data.channel, description:ans, auth:{token}});
+    pcMap[data.from]=pc;
+  });
+  socket.on('webrtc_answer', async d=>{ const pc=pcMap[d.from]; if(pc) await pc.setRemoteDescription(new RTCSessionDescription(d.description)); });
+  socket.on('webrtc_ice', async d=>{ const pc=pcMap[d.from]; if(pc&&d.candidate) try{await pc.addIceCandidate(d.candidate);}catch(e){} });
+  socket.on('ptt_started', async data=>{
+    if(data.sid===socket.id) return;
+    log(data.name+' is talking...'); statusEl.textContent=data.name+' talking...';
+    await ensureMic();
+  });
 
-    const rtcConfig = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    };
+  const startTalk=async(e)=>{ e.preventDefault(); try{await ensureMic();}catch{return;} socket.emit('ptt_start',{channel:channelEl.value, auth:{token}}); statusEl.textContent='Requesting channel...'; };
+  const endTalk=(e)=>{ e.preventDefault(); if(isTalking) socket.emit('ptt_end',{channel:channelEl.value, auth:{token}}); };
 
-    function status(text) { if (statusEl) statusEl.textContent = text; }
-    function addFeed(text) {
-      if (!feedEl) return;
-      feedEl.insertAdjacentHTML('afterbegin', `<div class="item">🔊 ${esc(text)}</div>`);
-    }
-    function closePeer(sid) {
-      const pc = peers.get(sid);
-      if (pc) { try { pc.close(); } catch {} }
-      peers.delete(sid);
-      const audio = remoteAudio.get(sid);
-      if (audio) { audio.pause(); audio.srcObject = null; audio.remove(); }
-      remoteAudio.delete(sid);
-    }
-    function closeAllPeers() {
-      [...peers.keys()].forEach(closePeer);
-    }
-    function resetRadio() {
-      closeAllPeers();
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-        localStream = null;
-      }
-      activeTalkerSid = null;
-      requesting = false;
-      talking = false;
-      pttEl.textContent = 'HOLD TO TALK';
-    }
-    function sendIce(target, candidate) {
-      socket.emit('webrtc_ice', { channel: currentChannel, target, candidate, auth });
-    }
-    function makePeer(remoteSid, initiator) {
-      if (!remoteSid || remoteSid === socket.id) return null;
-      closePeer(remoteSid);
-      const pc = new RTCPeerConnection(rtcConfig);
-      peers.set(remoteSid, pc);
-      pc.onicecandidate = e => { if (e.candidate) sendIce(remoteSid, e.candidate); };
-      pc.onconnectionstatechange = () => {
-        if (['failed','closed','disconnected'].includes(pc.connectionState)) closePeer(remoteSid);
-      };
-      pc.ontrack = e => {
-        let audio = remoteAudio.get(remoteSid);
-        if (!audio) {
-          audio = document.createElement('audio');
-          audio.autoplay = true;
-          audio.playsInline = true;
-          audio.setAttribute('aria-hidden', 'true');
-          audio.style.display = 'none';
-          document.body.appendChild(audio);
-          remoteAudio.set(remoteSid, audio);
-        }
-        audio.srcObject = e.streams[0];
-        audio.play().catch(() => {});
-      };
-      if (initiator && localStream) {
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-      }
-      return pc;
-    }
-    async function offerPeer(remoteSid) {
-      const pc = makePeer(remoteSid, true);
-      if (!pc) return;
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('webrtc_offer', { channel: currentChannel, target: remoteSid, description: pc.localDescription, auth });
-    }
-    async function beginMedia() {
-      if (!pressed || !talking) return;
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-          video: false
-        });
-        pttEl.textContent = 'RELEASE TO STOP';
-        const targets = [...peerInfo.keys()].filter(sid => sid !== socket.id);
-        await Promise.all(targets.map(offerPeer));
-        status('Transmitting…');
-      } catch (e) {
-        socket.emit('ptt_end', { channel: currentChannel, auth });
-        resetRadio();
-        status('Microphone permission is required for PTT.');
-      }
-    }
-    function startTalk() {
-      if (requesting || talking) return;
-      pressed = true;
-      requesting = true;
-      status('Requesting channel…');
-      socket.emit('ptt_start', { channel: currentChannel, auth });
-    }
-    function endTalk() {
-      pressed = false;
-      if (!requesting && !talking) return;
-      socket.emit('ptt_end', { channel: currentChannel, auth });
-      resetRadio();
-      status('Channel clear.');
-    }
+  pttBtn.addEventListener('touchstart', startTalk, {passive:false});
+  pttBtn.addEventListener('mousedown', startTalk);
+  pttBtn.addEventListener('touchend', endTalk, {passive:false});
+  pttBtn.addEventListener('mouseup', endTalk);
+  pttBtn.addEventListener('mouseleave', endTalk);
 
-    socket.on('radio_peers', data => {
-      if (String(data.channel) !== currentChannel) return;
-      peerInfo.clear();
-      (data.peers || []).forEach(p => peerInfo.set(String(p.sid), p));
-    });
-    socket.on('user_joined_channel', data => {
-      if (String(data.channel) !== currentChannel || !data.sid || data.sid === socket.id) return;
-      peerInfo.set(String(data.sid), data);
-    });
-    socket.on('user_left_channel', data => {
-      if (String(data.channel) !== currentChannel) return;
-      peerInfo.delete(String(data.sid));
-      closePeer(String(data.sid));
-    });
-    socket.on('channel_joined', data => {
-      currentChannel = String(data.channel);
-      status('Channel ' + currentChannel + ' connected.');
-    });
-    socket.on('ptt_started', data => {
-      if (String(data.channel) !== currentChannel) return;
-      activeTalkerSid = data.sid || null;
-      if (data.sid !== socket.id) {
-        status((data.name || data.email || 'Patroller') + ' is talking…');
-        addFeed((data.name || data.email || 'Patroller') + ' is speaking');
-      }
-    });
-    socket.on('ptt_granted', async data => {
-      if (String(data.channel) !== currentChannel || data.sid !== socket.id) return;
-      requesting = false;
-      if (!pressed) {
-        socket.emit('ptt_end', { channel: currentChannel, auth });
-        return;
-      }
-      talking = true;
-      await beginMedia();
-    });
-    socket.on('ptt_denied', data => {
-      requesting = false;
-      talking = false;
-      status(data.reason || 'PTT denied');
-      pttEl.textContent = 'HOLD TO TALK';
-    });
-    socket.on('channel_busy', data => {
-      requesting = false;
-      talking = false;
-      status('Channel busy: ' + (data.busy_by || 'another patroller'));
-      pttEl.textContent = 'HOLD TO TALK';
-    });
-    socket.on('ptt_ended', data => {
-      if (String(data.channel) !== currentChannel) return;
-      activeTalkerSid = null;
-      closeAllPeers();
-      if (data.sid !== socket.id) status('Channel clear.');
-    });
-    socket.on('webrtc_offer', async data => {
-      if (String(data.channel) !== currentChannel || !data.from || !data.description) return;
-      activeTalkerSid = data.from;
-      const pc = makePeer(String(data.from), false);
-      if (!pc) return;
-      try {
-        await pc.setRemoteDescription(data.description);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('webrtc_answer', { channel: currentChannel, target: data.from, description: pc.localDescription, auth });
-        status((data.name || data.email || 'Patroller') + ' is talking…');
-      } catch { closePeer(String(data.from)); }
-    });
-    socket.on('webrtc_answer', async data => {
-      if (String(data.channel) !== currentChannel || !data.from || !data.description) return;
-      const pc = peers.get(String(data.from));
-      if (!pc) return;
-      try { await pc.setRemoteDescription(data.description); } catch { closePeer(String(data.from)); }
-    });
-    socket.on('webrtc_ice', async data => {
-      if (String(data.channel) !== currentChannel || !data.from || !data.candidate) return;
-      const pc = peers.get(String(data.from));
-      if (!pc) return;
-      try { await pc.addIceCandidate(data.candidate); } catch {}
-    });
-    socket.on('disconnect', () => { resetRadio(); status('Offline'); });
-
-    function switchChannel() {
-      const next = String(channelEl.value || '1');
-      if (next === currentChannel) return;
-      if (requesting || talking) endTalk();
-      socket.emit('leave_channel', { channel: currentChannel });
-      peerInfo.clear();
-      closeAllPeers();
-      currentChannel = next;
-      socket.emit('join_channel', { channel: currentChannel, auth });
-      status('Joining channel ' + currentChannel + '…');
-    }
-
-    pttEl.onpointerdown = startTalk;
-    pttEl.onpointerup = endTalk;
-    pttEl.onpointercancel = endTalk;
-    pttEl.onpointerleave = e => { if (pressed && e.buttons === 0) endTalk(); };
-    channelEl.addEventListener('change', switchChannel);
-
-    return { endTalk, reset: resetRadio };
-  };
-})();
+  ensureMic(); log('Radio ready for '+user.email);
+};
