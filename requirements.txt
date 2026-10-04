@@ -1,4 +1,4 @@
 Flask
 Flask-Cors
 PyJWT
-Werkzeug
+psycopg2-binary
