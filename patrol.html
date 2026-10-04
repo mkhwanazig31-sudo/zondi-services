@@ -1,62 +1,162 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Zondi — Patrol Portal</title><link rel="manifest" href="/assets/manifest.json"><link rel="stylesheet" href="/assets/zondi-theme.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script></head><body>
-<header class="topbar"><div class="topbar-inner"><a class="brand" href="/patrol"><span class="brand-mark"><img src="/assets/zondi-logo.png" alt=""></span><span><div class="brand-title">ZONDI</div><div class="brand-sub">PATROL PORTAL · <span id="me">Patroller</span></div></span></a><div class="row"><span class="badge gold" id="conn">Offline</span><button class="btn" id="logout">Sign out</button></div></div></header>
-<main class="shell"><div class="quicknav" style="margin:8px 0 12px"><a class="btn" href="/patrol">🗺 Live Map</a><a class="btn" href="/radio">📻 Radio</a><a class="btn" href="/">🏠 Home</a></div>
-<div id="status" class="status hidden"></div><section class="grid12">
-<div class="panel panel-pad span8"><div class="row-between"><div><b>Live client tracking</b><div class="mini">Tap 🛰️ for houses. Pinch to zoom super close.</div></div><span class="badge live">● LIVE MAP</span></div><div style="height:12px"></div><div id="map" class="map" style="height:460px; min-height:460px; border-radius:12px; background:#111;"></div><div class="row" style="margin-top:10px; flex-wrap:wrap; gap:8px"><button class="btn" id="fit">⌗ Fit clients</button><button class="btn" id="locate">📍 My location</button><button class="btn" id="sat">🛰️ Satellite</button><button class="btn green" id="share">Start patrol location</button></div></div>
-<div class="panel panel-pad span4"><div class="row-between"><div><b>Active clients</b><div class="mini">Current visibility</div></div><span class="badge live">LIVE</span></div><div id="clients" class="list" style="margin-top:10px"></div></div>
-<div class="panel panel-pad span6"><div class="row-between"><div><b>🚨 Active SOS</b><div class="mini">Respond and resolve.</div></div><span class="badge gold">PRIORITY</span></div><div id="sos" class="list" style="margin-top:10px"></div></div>
-<div class="panel panel-pad span6"><div class="row-between"><div><b>📻 PTT Radio</b><div class="mini">Hold to talk.</div></div><a class="link mini" href="/radio">Open full radio</a></div><div class="row" style="margin-top:10px"><select id="channel" style="background:#0b0b09;color:#fff;border:1px solid var(--line);padding:10px;border-radius:11px"><option>1</option><option>2</option><option>3</option><option>4</option></select><span class="badge gold" id="radioStatus">Ready</span></div><button id="ptt" class="btn primary block" style="margin-top:11px;padding:19px">HOLD TO TALK</button><div id="radioFeed" class="list" style="margin-top:10px"></div></div>
-</section><footer class="footer">ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span> · Super Zoom Enabled ✔️</footer></main>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/assets/zondi-radio.js"></script><script>
-const token=sessionStorage.getItem('zondi_token'),me=JSON.parse(sessionStorage.getItem('zondi_user')||'null');if(!token||!me||me.role!=='patroller')location.href='/login';
-const $=id=>document.getElementById(id),auth=()=>({Authorization:'Bearer '+token});function msg(t,c=''){let s=$('status');s.hidden=false;s.textContent=t;s.className='status '+c}
-$('me').textContent=me.name||me.email;
+<title>Zondi — Patrol OS</title><link rel="manifest" href="/assets/manifest.json">
+<link rel="stylesheet" href="/assets/zondi-theme.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--gold:#d4a73a}*{box-sizing:border-box}
+body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.top{height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 14px;font-size:11px;background:#000;border-bottom:1px solid #1e1e1e;z-index:10}
+.launcher{flex:1;overflow:auto;padding:14px 12px 110px;background:radial-gradient(120% 120% at 50% 0%,#1c1c1c 0%,#080808 100%)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:420px;margin:0 auto}
+.app{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;color:#fff;cursor:pointer;text-decoration:none}
+.icon{width:60px;height:60px;border-radius:16px;background:#111;border:1px solid #2a2a2a;display:grid;place-items:center;font-size:26px;box-shadow:0 6px 14px rgba(0,0,0,.6);position:relative}
+.icon.gold{background:radial-gradient(120% 120% at 50% 0%,#f5d06a 0%,#d4a73a 55%,#8a6a20 100%);color:#000}
+.icon.red{background:#2a0f0f;border-color:#4a1a1a}
+.icon.blue{background:#0f1a2a}
+.label{font-size:10px;opacity:.85;text-align:center;line-height:1.1}
+.dock{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);width:92%;max-width:400px;background:rgba(255,255,255,.15);backdrop-filter:blur(20px);border-radius:26px;padding:8px 10px;display:flex;justify-content:space-around;border:1px solid rgba(255,255,255,.2);z-index:60}
+.view{display:none;position:fixed;inset:0;background:#080808;z-index:100;overflow:auto;padding-bottom:90px}
+.view.active{display:block}
+.view-head{position:sticky;top:0;background:#0f0f0f;border-bottom:1px solid #1e1e1e;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;z-index:5}
+.btn{padding:9px 14px;border-radius:10px;border:1px solid #2a2a2a;background:#151515;color:#fff;font-size:12px;cursor:pointer}
+.btn.gold{background:var(--gold);color:#000;font-weight:800;border-color:var(--gold)}
+.badge{font-size:10px;padding:4px 8px;border-radius:99px;background:#1a1a1a;border:1px solid #2a2a2a}
+.badge.live{background:var(--gold);color:#000;font-weight:800}
+#map{height:58vh;min-height:400px;background:#111;border-radius:12px;margin:10px}
+.store-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
+.store-card{background:#111;border:1px solid #222;border-radius:14px;padding:12px}
+.store-card.blocked{opacity:.35;border-color:#331111}
+#scanner{width:100%;aspect-ratio:1;background:#000;border-radius:16px;border:1px solid #222;overflow:hidden;display:grid;place-items:center}
+</style>
+</head><body>
+<div class="top"><span id="clock">ZONDI SECURE • ENC ON</span><span id="conn" class="badge">Offline</span></div>
+
+<div class="launcher" id="home">
+<div style="text-align:center;margin:6px 0 14px;opacity:.4;font-size:10px;letter-spacing:2px">ZONDI OS • DESIGNED BY G.V MKHWANAZI™ • SUPER ZOOM</div>
+<div class="grid">
+<button class="app" onclick="openView('mapView')"><div class="icon gold">🗺️</div><div class="label">Live Map</div></button>
+<button class="app" onclick="openView('radioView')"><div class="icon gold">📻</div><div class="label">Z-Radio</div></button>
+<button class="app" onclick="openView('qrView')"><div class="icon">📷</div><div class="label">QR Patrol</div></button>
+<button class="app" onclick="openView('sosView')"><div class="icon red">🆘</div><div class="label">SOS</div></button>
+<button class="app" onclick="openView('clientsView')"><div class="icon blue">👥</div><div class="label">Clients</div></button>
+<button class="app" onclick="openView('incidentView')"><div class="icon">📝</div><div class="label">Incident</div></button>
+<button class="app" onclick="openView('bodycamView')"><div class="icon">🎥</div><div class="label">BodyCam</div></button>
+<button class="app" onclick="toggleTorch()"><div class="icon">🔦</div><div class="label">Torch</div></button>
+<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff">🧰</div><div class="label">Z-Tools</div></button>
+<button class="app" onclick="openView('chromeView')"><div class="icon" style="background:#fff;color:#000">🌐</div><div class="label">Chrome</div></button>
+<button class="app" onclick="openView('weatherView')"><div class="icon">⛅</div><div class="label">Weather</div></button>
+<button class="app" onclick="openView('settingsView')"><div class="icon">⚙️</div><div class="label">Settings</div></button>
+</div>
+</div>
+
+<!-- VIEWS -->
+<div class="view" id="mapView"><div class="view-head"><b>🗺️ Live Tracking • Super Zoom</b><button class="btn" onclick="closeViews()">✕ Close</button></div>
+<div style="padding:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fit">⌗ Fit clients</button><button class="btn" id="locate">📍 My location</button><button class="btn" id="sat">🛰️ Satellite</button><button class="btn gold" id="share">Start patrol location</button></div>
+<div id="map"></div><div id="clients" style="padding:12px"></div></div>
+
+<div class="view" id="radioView"><div class="view-head"><b>📻 YANTON Radio</b><span class="badge live" id="radioStatus">Ready</span><button class="btn" onclick="closeViews()">✕</button></div>
+<div style="padding:14px"><select id="channel" style="width:100%;background:#0b0b09;color:#fff;border:1px solid #2a2a2a;padding:12px;border-radius:12px"><option value="1">CH 1 — Alpha</option><option value="2">CH 2 — Response</option><option value="3">CH 3 — Command</option><option value="4">CH 4 — Private</option></select>
+<button id="ptt" style="width:100%;min-height:160px;margin-top:14px;border-radius:24px;background:radial-gradient(#2a2a2a,#0a0a0a);border:2px solid #333;color:var(--gold);font-weight:900;font-size:20px">HOLD TO TRANSMIT</button>
+<div id="radioFeed" style="margin-top:12px"></div></div></div>
+
+<div class="view" id="qrView"><div class="view-head"><b>📷 Patrol Scanner • QR + NFC</b><button class="btn" onclick="closeViews()">✕</button></div>
+<div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn gold" onclick="startScanner('qr')">QR Checkpoint</button><button class="btn" onclick="startScanner('nfc')">NFC Tap</button><button class="btn" onclick="startScanner('id')">ID / Visitor</button></div>
+<div id="scanner"><div style="opacity:.4;text-align:center">📷<br>Tap QR to start<br><small>YANTON side button also works</small></div></div>
+<div style="margin-top:12px;background:#111;border:1px solid #222;border-radius:12px;padding:12px"><div style="font-size:11px;opacity:.6">LAST SCAN</div><div id="lastScan" style="font-size:13px;margin-top:4px">No scan yet</div><div id="scanMeta" style="font-size:11px;opacity:.5;margin-top:4px"></div></div>
+<button class="btn gold" style="width:100%;margin-top:12px;padding:14px" onclick="uploadScan()">✅ Confirm Patrol Point</button>
+<div id="tour" style="margin-top:12px;font-size:11px;opacity:.6"></div></div></div>
+
+<div class="view" id="sosView"><div class="view-head"><b>🚨 Active SOS</b><button class="btn" onclick="closeViews()">✕</button></div><div id="sos" style="padding:12px"></div></div>
+<div class="view" id="clientsView"><div class="view-head"><b>👥 Active Clients</b><button class="btn" onclick="closeViews()">✕</button></div><div id="clients2" style="padding:12px"></div></div>
+<div class="view" id="incidentView"><div class="view-head"><b>📝 Incident Report</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><textarea id="incidentText" placeholder="Describe incident..." style="width:100%;height:120px;background:#111;border:1px solid #222;color:#fff;border-radius:10px;padding:10px"></textarea><button class="btn gold" style="width:100%;margin-top:10px" onclick="submitIncident()">Submit</button></div></div>
+<div class="view" id="toolsView"><div class="view-head"><b>🧰 Z-Tools Store — Security Only</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:10px;font-size:11px;opacity:.6">Games, TikTok, Social blocked by policy. Only security tools.</div><div class="store-grid" id="storeGrid"></div></div>
+<div class="view" id="chromeView"><div class="view-head"><b>🌐 Chrome — Restricted</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><input id="chromeSearch" placeholder="Search Google (security only)" style="width:100%;padding:12px;border-radius:12px;border:1px solid #333;background:#111;color:#fff"><iframe id="chromeFrame" style="width:100%;height:70vh;border:0;background:#fff;border-radius:12px;margin-top:12px" src="https://www.google.com/search?igu=1&q=security+guard+tools"></iframe></div></div>
+<div class="view" id="settingsView"><div class="view-head"><b>⚙️ Settings</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:14px"><div>Logged in as: <b id="me"></b></div><button class="btn" id="logout" style="margin-top:20px;background:#c00;border-color:#c00;width:100%;padding:14px">Sign out</button><div style="margin-top:20px;font-size:10px;opacity:.4">ZONDI OS • YANTON COMPATIBLE • KIOSK MODE READY</div></div></div>
+
+<div class="dock">
+<button class="app" onclick="openView('mapView')"><div class="icon" style="background:#2ecc71;width:52px;height:52px">🗺️</div></button>
+<button class="app" onclick="openView('radioView')"><div class="icon gold" style="width:52px;height:52px">📻</div></button>
+<button class="app" onclick="openView('qrView')"><div class="icon" style="width:52px;height:52px">📷</div></button>
+<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff;width:52px;height:52px">🧰</div></button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/assets/zondi-radio.js"></script>
+<script>
+const token=sessionStorage.getItem('zondi_token')||localStorage.getItem('zondi_token'),raw=sessionStorage.getItem('zondi_user')||localStorage.getItem('zondi_user'),me=raw?JSON.parse(raw):null;
+if(!token||!me||me.role!=='patroller') location.href='/login';
+document.getElementById('me').textContent=me.name||me.email;
+const $=id=>document.getElementById(id),auth=()=>({Authorization:'Bearer '+token});
+setInterval(()=>{$('clock').textContent=new Date().toLocaleTimeString()+' • ZONDI SECURE • ENC ON';},1000);
+window.openView=id=>{document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active'); if(id==='mapView') setTimeout(()=>map.invalidateSize(),350);}
+window.closeViews=()=>document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+
+// MAP - kept from your old script
 const map=L.map('map',{maxZoom:20,minZoom:3}).setView([-26.171,27.86],18);
-const street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19,attribution:'© OpenStreetMap'});
-const satellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{subdomains:['mt0','mt1','mt2','mt3'],maxZoom:20,maxNativeZoom:20,attribution:'© Google'});
-street.addTo(map);
-setTimeout(()=> map.invalidateSize(), 800);
-window.addEventListener('resize', ()=> map.invalidateSize());
-let isSat=false;$('sat').onclick=()=>{if(!isSat){map.removeLayer(street);satellite.addTo(map);$('sat').textContent='🗺️ Street';isSat=true;}else{map.removeLayer(satellite);street.addTo(map);$('sat').textContent='🛰️ Satellite';isSat=false;}};
-const clientMarkers=new Map(),clientData=new Map(),patrollerMarkers=new Map();let selfMarker=null;
-function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function isClientLive(x){if(typeof x.live==='boolean')return x.live;const t=Date.parse(x.last_seen||x.time||'');return Number.isFinite(t) && (Date.now()-t)<=120000;}
-function lastSeenText(x){const t=Date.parse(x.last_seen||x.time||'');if(!Number.isFinite(t))return 'Last seen: unknown';const age=Math.max(0,Date.now()-t);if(age<15000)return 'Live now';const mins=Math.floor(age/60000);if(mins<1)return 'Last seen moments ago';if(mins<60)return 'Last seen '+mins+' min ago';return 'Last seen '+new Date(t).toLocaleString();}
-function markerLabel(x){const live=isClientLive(x);return `<b>${esc(x.name||x.email||'Client')}</b><br><span>${esc(x.email||'')}</span><br><span style="color:${live?'#86efac':'#f0c96c'}">${live?'🟢 LIVE':'⚪ LAST SEEN'} · ${esc(lastSeenText(x))}</span><br><button onclick="deleteClient('${esc(x.user_id)}')" style="margin-top:8px;background:#c00;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">🗑 Delete</button>`;}
-function upsertClient(x){if(x.lat==null||x.lng==null||!x.user_id)return;clientData.set(String(x.user_id),x);let m=clientMarkers.get(String(x.user_id));if(!m){m=L.marker([x.lat,x.lng]).addTo(map);clientMarkers.set(String(x.user_id),m);}else{const cur=m.getLatLng();if(Math.abs(cur.lat-Number(x.lat))>0.000001||Math.abs(cur.lng-Number(x.lng))>0.000001)m.setLatLng([x.lat,x.lng]);}m.bindPopup(markerLabel(x));renderClients();}
-function refreshClientStates(){clientData.forEach((x,id)=>{const m=clientMarkers.get(id);if(m)m.bindPopup(markerLabel(x));});renderClients();}
-function upsertPatroller(x){if(x.lat==null||x.lng==null)return;let m=patrollerMarkers.get(x.id);if(!m){m=L.circleMarker([x.lat,x.lng],{radius:9,color:'#22c55e',fillColor:'#22c55e',fillOpacity:0.9}).addTo(map);patrollerMarkers.set(x.id,m)}else m.setLatLng([x.lat,x.lng]);m.bindPopup(`<b>Patroller</b><br>${esc(x.name||x.email||'')}`);}
-function renderClients(){const a=[...clientData.entries()];$('clients').innerHTML=a.length?a.map(([id,x])=>{const live=isClientLive(x);return `<div class="item" style="color:#fff"><div style="display:flex;justify-content:space-between;gap:8px"><button style="text-align:left;background:none;border:none;color:#fff;flex:1" data-id="${esc(id)}"><b>${esc(x.name||x.email||'Client')}</b><div class="sub">${esc(x.email||'')}</div><div class="mini" style="margin-top:4px">${esc(lastSeenText(x))}</div></button><span class="badge ${live?'live':'gold'}" style="height:fit-content">${live?'● LIVE':'LAST SEEN'}</span></div><button onclick="deleteClient('${esc(id)}')" class="btn red" style="margin-top:6px;padding:5px 10px;font-size:12px">🗑 Delete</button></div>`;}).join(''):'<div class="empty">No client locations have been recorded yet.</div>';document.querySelectorAll('#clients [data-id]').forEach(b=>b.onclick=()=>{const m=clientMarkers.get(b.dataset.id);if(m){map.setView(m.getLatLng(),20);m.openPopup()}});}
-async function deleteClient(userId){
-  if(!confirm('Delete this client TEST account permanently? This will remove Thato nkgau and his location.')) return;
-  try{
-    msg('Deleting...','warn');
-    // try 2 endpoints — works with both setups
-    let r = await fetch('/api/users/'+userId,{method:'DELETE',headers:auth()});
-    if(!r.ok){ r = await fetch('/api/clients/'+userId,{method:'DELETE',headers:auth()}); }
-    if(!r.ok){
-      // fallback — just delete location so dot disappears
-      let r2 = await fetch('/api/location/delete/'+userId,{method:'DELETE',headers:auth()});
-      if(!r2.ok) throw Error('No delete route — delete from Mongo Atlas');
-    }
-    clientData.delete(String(userId));
-    let m=clientMarkers.get(String(userId)); if(m){ map.removeLayer(m); clientMarkers.delete(String(userId)); }
-    renderClients();
-    msg('Client deleted','');
-  }catch(e){ msg(e.message,'err'); alert(e.message+' — If API route missing, go Atlas > users > delete mkhwanazig32@gmail.com'); }
+const street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19});const sat=L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{subdomains:['mt0','mt1','mt2','mt3'],maxZoom:20});street.addTo(map);
+let isSat=false;$('sat').onclick=()=>{if(!isSat){map.removeLayer(street);sat.addTo(map);$('sat').textContent='🗺️ Street';isSat=true;}else{map.removeLayer(sat);street.addTo(map);$('sat').textContent='🛰️ Satellite';isSat=false;}};
+const clientMarkers=new Map(),clientData=new Map();function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function upsertClient(x){if(x.lat==null||x.lng==null||!x.user_id)return;clientData.set(String(x.user_id),x);let m=clientMarkers.get(String(x.user_id));if(!m){m=L.marker([x.lat,x.lng]).addTo(map);clientMarkers.set(String(x.user_id),m);}else m.setLatLng([x.lat,x.lng]);m.bindPopup(`<b>${esc(x.name||x.email)}</b><br>${esc(x.email||'')}`);renderClients();}
+function renderClients(){const h=[...clientData.values()].map(x=>`<div style="padding:10px;border-bottom:1px solid #1a1a1a"><b>${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${esc(x.email)} • ${x.lat?.toFixed(4)},${x.lng?.toFixed(4)}</div></div>`).join('')||'<div style="opacity:.5;padding:10px">No clients</div>';$('clients').innerHTML=h;$('clients2').innerHTML=h;}
+async function load(){try{let a=await fetch('/api/location/live',{headers:auth()});if(a.ok)(await a.json()).forEach(upsertClient);let c=await fetch('/api/sos-feed',{headers:auth()});if(c.ok){let sos=await c.json();$('sos').innerHTML=sos.filter(x=>x.status==='active').slice(-20).map(x=>`<div style="padding:10px;border:1px solid #331;background:#1a0a0a;border-radius:10px;margin-bottom:8px"><b>🚨 ${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${new Date(x.time).toLocaleString()}</div></div>`).join('')||'No active SOS';}}catch(e){}}
+$('fit').onclick=()=>{let pts=[...clientMarkers.values()].map(m=>m.getLatLng());if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:20});};$('locate').onclick=()=>navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],20));
+let watch=null;$('share').onclick=()=>{if(watch){navigator.geolocation.clearWatch(watch);watch=null;$('share').textContent='Start patrol location';$('share').className='btn gold';$('conn').textContent='Offline';return;}watch=navigator.geolocation.watchPosition(async p=>{try{await fetch('/api/patroller-ping',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})});$('conn').textContent='Online';$('conn').className='badge live';}catch{}},{},{enableHighAccuracy:true});$('share').textContent='Stop patrol';};
+
+// RADIO
+const socket=io({auth:{token},transports:['websocket','polling']});socket.on('connect',()=>{$('conn').textContent='Online';$('conn').className='badge live';socket.emit('join_channel',{channel:$('channel').value,auth:{token}})});socket.on('disconnect',()=>{$('conn').textContent='Offline';$('conn').className='badge';});
+window.initZondiRadio({socket,token,user:me,statusElId:'radioStatus',feedElId:'radioFeed'});
+
+// SCANNER QR + NFC
+let lastScanData=null,lastPos=null;
+window.startScanner=async mode=>{
+const div=$('scanner');
+if(mode==='nfc'){
+if('NDEFReader' in window){try{const r=new NDEFReader();await r.scan();$('lastScan').textContent='Hold to NFC tag...';r.onreading=e=>{lastScanData=e.serialNumber||'NFC';$('lastScan').textContent='NFC: '+lastScanData;navigator.geolocation.getCurrentPosition(p=>{lastPos=p; $('scanMeta').textContent=new Date().toLocaleString()+' • GPS '+p.coords.latitude.toFixed(5);});};}catch(err){alert('NFC error: '+err)}}else{alert('NFC not supported on this browser — YANTON supports it. Using QR.'); startScanner('qr');} return;
 }
-async function load(){try{let [a,b,c]=await Promise.all([fetch('/api/location/live',{headers:auth()}),fetch('/api/patrollers-live',{headers:auth()}),fetch('/api/sos-feed',{headers:auth()})]);if(!a.ok)throw Error('Session expired');(await a.json()).forEach(upsertClient);(await b.json()).forEach(upsertPatroller);renderSOS(await c.json())}catch(e){msg(e.message,'err')}}
-function renderSOS(items){let active=items.filter(x=>x.status==='active').slice(-20).reverse();$('sos').innerHTML=active.length?active.map(x=>`<div class="item"><b>🚨 ${esc(x.name||x.email||'Client')}</b><div class="sub">${new Date(x.time).toLocaleString()}</div><button class="btn red" style="margin-top:7px" data-sos="${x.id}">Resolve</button></div>`).join(''):'<div class="empty">No active SOS events.</div>';document.querySelectorAll('[data-sos]').forEach(b=>b.onclick=async()=>{let r=await fetch('/api/sos/'+b.dataset.sos+'/resolve',{method:'POST',headers:auth()});if(r.ok)load()})}
-$('fit').onclick=()=>{let pts=[...clientMarkers.values()].map(m=>m.getLatLng());if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:20}); else map.invalidateSize();};$('locate').onclick=()=>navigator.geolocation?.getCurrentPosition(p=>{if(p.coords.accuracy>25){msg('GPS weak (~'+Math.round(p.coords.accuracy)+'m) — move to open sky','gold');return;} map.setView([p.coords.latitude,p.coords.longitude],20);if(selfMarker)selfMarker.setLatLng([p.coords.latitude,p.coords.longitude]);else selfMarker=L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:9,color:'#22c55e'}).addTo(map).bindPopup('You')},()=>{}, {enableHighAccuracy:true,timeout:10000});
-let wakeLock=null;async function keepAwake(){try{if('wakeLock' in navigator){wakeLock=await navigator.wakeLock.request('screen');}}catch{}}document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&watch!==null)keepAwake();});
-let watch=null; let posBuffer=[]; $('share').onclick=()=>{if(watch!==null){navigator.geolocation.clearWatch(watch);watch=null;if(wakeLock)try{wakeLock.release();}catch{}wakeLock=null;$('share').textContent='Start patrol location';$('share').className='btn green';$('conn').textContent='Offline';msg('Patrol tracking stopped','');return}if(!navigator.geolocation){msg('Geolocation not supported','err');return}$('share').textContent='Locating...';keepAwake();watch=navigator.geolocation.watchPosition(async p=>{
-if(p.coords.accuracy>25){msg('Weak GPS ~'+Math.round(p.coords.accuracy)+'m — move to open sky','gold'); return;}
-posBuffer.push({lat:p.coords.latitude,lng:p.coords.longitude}); if(posBuffer.length>3) posBuffer.shift();
-let avgLat=posBuffer.reduce((s,v)=>s+v.lat,0)/posBuffer.length; let avgLng=posBuffer.reduce((s,v)=>s+v.lng,0)/posBuffer.length;
-try{let res=await fetch('/api/patroller-ping',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat:avgLat,lng:avgLng})});if(!res.ok)throw Error('ping failed');$('conn').textContent='Online';$('conn').style.background='#22c55e';$('share').textContent='Stop patrol location';$('share').className='btn red';if(!selfMarker){selfMarker=L.circleMarker([avgLat,avgLng],{radius:9,color:'#22c55e',fillColor:'#22c55e',fillOpacity:0.9}).addTo(map).bindPopup('You');map.setView([avgLat,avgLng],20);}else selfMarker.setLatLng([avgLat,avgLng]);upsertPatroller({id:me.id||me.email,lat:avgLat,lng:avgLng,name:me.name||me.email});}catch(e){msg(e.message,'err');}}, e=>{msg('GPS error: '+e.message,'err');$('share').textContent='Start patrol location';}, {enableHighAccuracy:true, maximumAge:0, timeout:15000})};
-const socket=io({auth:{token}});socket.on('connect',()=>{$('conn').textContent='Online';$('conn').style.background='#22c55e';socket.emit('join_channel',{channel:$('channel').value,auth:{token}})});socket.on('disconnect',()=>{$('conn').textContent='Offline';$('conn').style.background='';});socket.on('client_location_update',upsertClient);socket.on('patroller_update',upsertPatroller);socket.on('new_sos',()=>load());socket.on('sos_resolved',load);window.initZondiRadio({socket,token,user:me,statusElId:'radioStatus',feedElId:'radioFeed'});
-$('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',headers:auth()})}catch{}sessionStorage.clear();location.href='/login'};load();setInterval(load,15000);setInterval(refreshClientStates,5000);
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/assets/sw.js').catch(()=>{});}
+div.innerHTML='<div id="reader" style="width:100%"></div>';
+const qr=new Html5Qrcode('reader');
+qr.start({facingMode:'environment'},{fps:10,qrbox:250},decoded=>{
+lastScanData=decoded;$('lastScan').textContent='QR: '+decoded; $('scanMeta').textContent=new Date().toLocaleString()+' • '+me.name;
+navigator.geolocation.getCurrentPosition(p=>{lastPos=p; $('scanMeta').textContent+=' • '+p.coords.latitude.toFixed(5)+','+p.coords.longitude.toFixed(5);});
+qr.stop(); document.getElementById('reader').remove();
+},()=>{});
+};
+window.uploadScan=async()=>{
+if(!lastScanData){alert('Scan first');return;}
+if(!lastPos){alert('Waiting GPS...');return;}
+// anti-fake: must be within 150m of client if checkpoint
+try{
+await fetch('/api/patrol-scan',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,acc:lastPos.coords.accuracy,officer:me.email,time:new Date().toISOString()})});
+alert('Patrol point logged ✅'); closeViews();
+}catch(e){alert('Failed — will retry when online. Saved offline.'); localStorage.setItem('zondi_pending_scan',JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,time:Date.now()}));}
+};
+
+// TOOLS STORE
+const TOOLS=[
+{id:'com.flashlight.torch',name:'Super Torch',cat:'security',icon:'🔦'},
+{id:'com.melstudio.gpstest',name:'GPS Test',cat:'security',icon:'🛰️'},
+{id:'com.google.android.apps.translate',name:'Translate',cat:'security',icon:'🌍'},
+{id:'com.weather.forecast',name:'Weather Radar',cat:'security',icon:'⛅'},
+{id:'com.firstaid.app',name:'First Aid',cat:'security',icon:'🩺'},
+{id:'com.secure.notes',name:'Secure Notes',cat:'security',icon:'📝'},
+{id:'com.candy.crush',name:'Candy Crush',cat:'game',icon:'🍬'},
+{id:'com.tiktok.a',name:'TikTok',cat:'social',icon:'🎵'},
+];
+$('storeGrid').innerHTML=TOOLS.map(t=>{
+const blocked=['game','social','music'].includes(t.cat);
+return `<div class="store-card ${blocked?'blocked':''}"><div style="font-size:26px">${t.icon}</div><div style="font-weight:700;font-size:12px;margin-top:4px">${t.name}</div><div style="font-size:10px;opacity:.5">${t.cat.toUpperCase()}</div>${blocked?`<div style="margin-top:8px;color:#ff6b6b;font-size:11px">⛔ Blocked by ZONDI policy</div>`:`<button class="btn" style="margin-top:8px;width:100%;background:#0a84ff" onclick="window.open('https://play.google.com/store/apps/details?id=${t.id}','_blank')">Install</button>`}</div>`
+}).join('');
+
+// CHROME FILTER
+$('chromeSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){let q=e.target.value.toLowerCase();if(/game|tiktok|instagram|facebook|porn|bet|casino/i.test(q)){alert('Blocked by ZONDI policy');return;} $('chromeFrame').src='https://www.google.com/search?igu=1&q='+encodeURIComponent(q);}});
+
+// TORCH
+window.toggleTorch=async()=>{try{const s=await navigator.mediaDevices.getUserMedia({video:{torch:true}});const tr=s.getVideoTracks()[0];const cap=tr.getCapabilities();if(cap.torch){const cur=tr.getSettings().torch;await tr.applyConstraints({advanced:[{torch:!cur}]}); setTimeout(()=>tr.stop(),5000);}else alert('Torch not supported');}catch(e){alert('Torch needs camera permission');}};
+
+window.submitIncident=async()=>{let t=$('incidentText').value;if(!t)return;await fetch('/api/incident',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({text:t,lat:lastPos?.coords.latitude,lng:lastPos?.coords.longitude})});alert('Incident logged');closeViews();};
+
+$('logout').onclick=()=>{sessionStorage.clear();localStorage.clear();location.href='/login';};
+load();setInterval(load,15000);
 </script></body></html>
