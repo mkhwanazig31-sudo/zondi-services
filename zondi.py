@@ -70,7 +70,8 @@ def init_db():
     except Exception as e:
         print("init_db error", e)
     finally:
-        conn.close()
+        try: conn.close()
+        except: pass
 
 def db_get_user(email):
     email = email.lower().strip()
@@ -108,7 +109,8 @@ def db_save_user(u):
         return False
 
 if USE_PG:
-    init_db()
+    try: init_db()
+    except: pass
 
 # --- FILE FALLBACK ---
 DB_FILE = BASE_DIR / "zondi_db.json"
@@ -286,7 +288,6 @@ def admin_approve():
         save_file_db()
     return jsonify({'ok':True})
 
-# --- FIX FOR API NOT FOUND BANNER ---
 @app.route('/api/dev-stats')
 @dev_auth_required
 def dev_stats():
@@ -321,9 +322,13 @@ def client_requests_route():
 @app.route('/api/forgot-password', methods=['POST'])
 def forgot_api(): return jsonify({'ok':True,'message':'Request sent to admin'})
 
-# --- ZONDI RADIO NET - REAL ---
-RADIO_DIR = BASE_DIR / "radio"
-RADIO_DIR.mkdir(exist_ok=True)
+# --- ZONDI RADIO NET - REAL (VERCEL SAFE) ---
+RADIO_DIR = pathlib.Path("/tmp/radio")
+try:
+    RADIO_DIR.mkdir(parents=True, exist_ok=True)
+except Exception as e:
+    print("radio dir fallback to /tmp", e)
+    RADIO_DIR = pathlib.Path("/tmp")
 RADIO_LOG = []
 RADIO_PRESENCE = {}
 
@@ -331,7 +336,8 @@ def cleanup_presence():
     now = datetime.utcnow()
     dead = [e for e, v in list(RADIO_PRESENCE.items()) if (now - v['last']).total_seconds() > 35]
     for e in dead:
-        del RADIO_PRESENCE[e]
+        try: del RADIO_PRESENCE[e]
+        except: pass
 
 @app.route('/api/radio/presence', methods=['POST'])
 @auth_required
@@ -365,20 +371,22 @@ def radio_presence():
 @auth_required
 def radio_feed():
     cleanup_presence()
-    return jsonify({'ok':True,'items':RADIO_LOG[-20:], 'presence': list(RADIO_PRESENCE.values())})
+    return jsonify({'ok':True,'items':RADIO_LOG[-20:]})
 
 @app.route('/api/radio/push', methods=['POST'])
 @auth_required
 def radio_push():
     f = request.files.get('audio')
     if not f: return jsonify({'ok':False,'error':'No audio'}),400
-    fname = f"radio_{int(datetime.utcnow().timestamp())}_{request.user_data['email'].split('@')[0]}.webm"
+    safe_name = request.user_data['email'].split('@')[0].replace('.','_').replace('/','_')
+    fname = f"radio_{int(datetime.utcnow().timestamp())}_{safe_name}.webm"
     path = RADIO_DIR / fname
-    f.save(str(path))
+    try: f.save(str(path))
+    except Exception as e: print("save radio fail", e)
     item = {'name':request.user_data.get('name','Patroller'),'email':request.user_data['email'].lower(),'time':datetime.utcnow().isoformat(),'file':fname,'url':f'/radio/{fname}'}
     RADIO_LOG.append(item)
     if len(RADIO_LOG)>50: RADIO_LOG.pop(0)
-    return jsonify({'ok':True,'item':item, 'sent_to': len(RADIO_PRESENCE)-1})
+    return jsonify({'ok':True,'item':item, 'sent_to': max(0, len(RADIO_PRESENCE)-1)})
 
 @app.route('/radio/<path:filename>')
 def serve_radio(filename):
