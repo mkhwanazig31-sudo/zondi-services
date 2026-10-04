@@ -52,7 +52,6 @@ body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;
 </div>
 </div>
 
-<!-- VIEWS -->
 <div class="view" id="mapView"><div class="view-head"><b>🗺️ Live Tracking • Super Zoom</b><button class="btn" onclick="closeViews()">✕ Close</button></div>
 <div style="padding:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fit">⌗ Fit clients</button><button class="btn" id="locate">📍 My location</button><button class="btn" id="sat">🛰️ Satellite</button><button class="btn gold" id="share">Start patrol location</button></div>
 <div id="map"></div><div id="clients" style="padding:12px"></div></div>
@@ -108,19 +107,56 @@ let watch=null;$('share').onclick=()=>{if(watch){navigator.geolocation.clearWatc
 const socket=io({auth:{token},transports:['websocket','polling']});socket.on('connect',()=>{$('conn').textContent='Online';$('conn').className='badge live';socket.emit('join_channel',{channel:$('channel').value,auth:{token}})});socket.on('disconnect',()=>{$('conn').textContent='Offline';$('conn').className='badge';});
 window.initZondiRadio({socket,token,user:me,statusElId:'radioStatus',feedElId:'radioFeed'});
 
-// SCANNER QR + NFC
+// SCANNER QR + NFC - FIXED NO POPUP
 let lastScanData=null,lastPos=null;
 window.startScanner=async mode=>{
 const div=$('scanner');
 if(mode==='nfc'){
-if('NDEFReader' in window){try{const r=new NDEFReader();await r.scan();$('lastScan').textContent='Hold to NFC tag...';r.onreading=e=>{lastScanData=e.serialNumber||'NFC';$('lastScan').textContent='NFC: '+lastScanData;navigator.geolocation.getCurrentPosition(p=>{lastPos=p; $('scanMeta').textContent=new Date().toLocaleString()+' • GPS '+p.coords.latitude.toFixed(5);});};}catch(err){alert('NFC error: '+err)}}else{alert('NFC not supported on this browser — YANTON supports it. Using QR.'); startScanner('qr');} return;
+  const btn=document.getElementById('nfcBtn');
+  try{
+    if(!('NDEFReader' in window)) throw new Error('No NDEF API');
+    const r=new NDEFReader();
+    await r.scan();
+    $('lastScan').textContent='Hold to NFC tag...';
+    r.onreading=e=>{
+      lastScanData=e.serialNumber||'NFC-'+Date.now();
+      $('lastScan').textContent='NFC: '+lastScanData;
+      navigator.geolocation.getCurrentPosition(p=>{
+        lastPos=p;
+        $('scanMeta').textContent=new Date().toLocaleString()+' • GPS '+p.coords.latitude.toFixed(5);
+      });
+    };
+  }catch(err){
+    console.log('NFC not supported:',err.message);
+    if(btn){
+      btn.style.opacity='0.25';
+      btn.style.pointerEvents='none';
+      btn.textContent='🚫 NFC N/A';
+      btn.title='NFC not supported - YANTON only';
+    }
+    $('lastScan').textContent='NFC not available on this phone — switched to QR';
+    // auto fallback to QR
+    setTimeout(()=>{ 
+      div.innerHTML='<div id="reader" style="width:100%"></div>';
+      const qr=new Html5Qrcode('reader');
+      qr.start({facingMode:'environment'},{fps:10,qrbox:250},decoded=>{
+        lastScanData=decoded;$('lastScan').textContent='QR: '+decoded;
+        navigator.geolocation.getCurrentPosition(p=>{
+          lastPos=p;
+          $('scanMeta').textContent=new Date().toLocaleString()+' • '+p.coords.latitude.toFixed(5);
+        });
+        try{qr.stop();}catch{}
+      },()=>{});
+    },600);
+  }
+  return;
 }
 div.innerHTML='<div id="reader" style="width:100%"></div>';
 const qr=new Html5Qrcode('reader');
 qr.start({facingMode:'environment'},{fps:10,qrbox:250},decoded=>{
 lastScanData=decoded;$('lastScan').textContent='QR: '+decoded; $('scanMeta').textContent=new Date().toLocaleString()+' • '+me.name;
 navigator.geolocation.getCurrentPosition(p=>{lastPos=p; $('scanMeta').textContent+=' • '+p.coords.latitude.toFixed(5)+','+p.coords.longitude.toFixed(5);});
-qr.stop(); document.getElementById('reader').remove();
+try{qr.stop();}catch{} const rd=document.getElementById('reader'); if(rd) rd.remove();
 },()=>{});
 };
 window.uploadScan=async()=>{
@@ -159,18 +195,15 @@ window.submitIncident=async()=>{let t=$('incidentText').value;if(!t)return;await
 $('logout').onclick=()=>{sessionStorage.clear();localStorage.clear();location.href='/login';};
 load();setInterval(load,15000);
 
-// === FIX #1 NFC AUTO-HIDE ===
+// === AUTO NFC HIDE ON LOAD - NO POPUP ===
 (function(){
   const btn = document.getElementById('nfcBtn');
   if(!btn) return;
+  // we test scan in background, if fails we grey out silently
   if(!('NDEFReader' in window)){
-    btn.style.opacity = '0.25';
-    btn.style.pointerEvents = 'none';
-    btn.innerHTML = '🚫 NFC N/A';
-    btn.title = 'NFC not supported on this device - YANTON only';
-  } else {
-    btn.innerHTML = '📡 NFC Tap • Ready';
-    btn.classList.add('gold');
+    btn.style.opacity='0.25'; btn.style.pointerEvents='none'; btn.textContent='🚫 NFC N/A';
+    return;
   }
-})();
-</script></body></html>
+  // try to see if hardware supports - if NotSupportedError, grey out
+  try{
+    //
