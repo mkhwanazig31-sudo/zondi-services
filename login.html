@@ -18,18 +18,33 @@
 const $=id=>document.getElementById(id),statusEl=$('status');
 const msg=(t,c='')=>{statusEl.hidden=false;statusEl.className='status '+c;statusEl.textContent=t};
 function togglePass(inputId,btnId){const i=$(inputId),b=$(btnId);b.onclick=()=>{const show=i.type==='password';i.type=show?'text':'password';b.textContent=show?'Hide':'Show'};}
-function saveSession(d){sessionStorage.setItem('zondi_token',d.token);sessionStorage.setItem('zondi_user',JSON.stringify(d.user))}
+function saveSession(d){
+  // FIXED: save everywhere patrol & clients check
+  localStorage.setItem('zondi_token', d.token);
+  sessionStorage.setItem('zondi_token', d.token);
+  sessionStorage.setItem('zondi_user', JSON.stringify(d.user));
+  localStorage.setItem('zondi_user', JSON.stringify(d.user));
+  document.cookie = `zondi_token=${d.token}; path=/; max-age=604800; SameSite=Lax`;
+}
 togglePass('password','show');togglePass('devPass','showDev');
 $('devToggle').onclick=()=>{$('devForm').classList.toggle('hidden');$('devPass').focus()};
 $('login').onsubmit=async e=>{e.preventDefault();$('loginBtn').disabled=true;$('loginBtn').textContent='Signing in…';try{
 const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({email:$('email').value.trim(),password:$('password').value})});
 let d={};try{d=await r.json()}catch{throw Error('Server returned an invalid response.')};if(!r.ok||!d.ok)throw Error(d.error||'Login failed');
-saveSession(d);location.href='/dashboard';
+saveSession(d);
+// FIXED: role-based redirect, not /dashboard
+const role = (d.user && d.user.role) ? d.user.role.toLowerCase() : 'client';
+if(role === 'dev') location.href='/dev';
+else if(role === 'patroller') location.href='/patrol';
+else location.href='/clients';
 }catch(e){msg(e.message,'err')}finally{$('loginBtn').disabled=false;$('loginBtn').textContent='Sign in'}};
 $('devForm').onsubmit=async e=>{e.preventDefault();$('devBtn').disabled=true;$('devBtn').textContent='Checking…';try{
 const r=await fetch('/api/dev-login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({password:$('devPass').value})});
 let d={};try{d=await r.json()}catch{throw Error('Server returned an invalid response.')};
-if(!r.ok||!d.ok){if(r.status===503)throw Error('Developer access is not configured on the server. Set DEV_PORTAL_PASSWORD in Render → Environment.');throw Error(d.error||'Developer login failed')}
-sessionStorage.setItem('zondi_dev_token',d.token);location.href=d.redirect||'/dev';
+if(!r.ok||!d.ok){if(r.status===503)throw Error('Developer access is not configured on the server. Set DEV_PORTAL_PASSWORD in Vercel → Environment.');throw Error(d.error||'Developer login failed')}
+localStorage.setItem('zondi_dev_token', d.token);
+sessionStorage.setItem('zondi_dev_token', d.token);
+document.cookie = `zondi_token=${d.token}; path=/; max-age=604800; SameSite=Lax`;
+location.href=d.redirect||'/dev';
 }catch(e){msg(e.message,'err')}finally{$('devBtn').disabled=false;$('devBtn').textContent='Enter Developer Portal'}};
 </script></body></html>
