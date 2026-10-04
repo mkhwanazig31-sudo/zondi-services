@@ -1,180 +1,267 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Zondi — Patrol OS</title><link rel="manifest" href="/assets/manifest.json">
-<link rel="stylesheet" href="/assets/zondi-theme.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<style>
-:root{--gold:#d4a73a}*{box-sizing:border-box}
-body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
-.top{height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 14px;font-size:11px;background:#000;border-bottom:1px solid #1e1e1e;z-index:10}
-.launcher{flex:1;overflow:auto;padding:14px 12px 110px;background:radial-gradient(120% 120% at 50% 0%,#1c1c1c 0%,#080808 100%)}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:420px;margin:0 auto}
-.app{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;color:#fff;cursor:pointer;text-decoration:none;-webkit-tap-highlight-color:transparent}
-.icon{width:60px;height:60px;border-radius:16px;background:#111;border:1px solid #2a2a2a;display:grid;place-items:center;font-size:26px;box-shadow:0 6px 14px rgba(0,0,0,.6);position:relative}
-.icon.gold{background:radial-gradient(120% 120% at 50% 0%,#f5d06a 0%,#d4a73a 55%,#8a6a20 100%);color:#000}
-.icon.red{background:#2a0f0f;border-color:#4a1a1a}
-.icon.blue{background:#0f1a2a}
-.label{font-size:10px;opacity:.85;text-align:center;line-height:1.1}
-.dock{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);width:92%;max-width:400px;background:rgba(255,255,255,.15);backdrop-filter:blur(20px);border-radius:26px;padding:8px 10px;display:flex;justify-content:space-around;border:1px solid rgba(255,255,255,.2);z-index:60}
-.view{display:none;position:fixed;inset:0;background:#080808;z-index:100;overflow:auto;padding-bottom:90px}
-.view.active{display:block}
-.view-head{position:sticky;top:0;background:#0f0f0f;border-bottom:1px solid #1e1e1e;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;z-index:5}
-.btn{padding:9px 14px;border-radius:10px;border:1px solid #2a2a2a;background:#151515;color:#fff;font-size:12px;cursor:pointer}
-.btn.gold{background:var(--gold);color:#000;font-weight:800;border-color:var(--gold)}
-.badge{font-size:10px;padding:4px 8px;border-radius:99px;background:#1a1a1a;border:1px solid #2a2a2a}
-.badge.live{background:var(--gold);color:#000;font-weight:800}
-#map{height:58vh;min-height:400px;background:#111;border-radius:12px;margin:10px}
-.store-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
-.store-card{background:#111;border:1px solid #222;border-radius:14px;padding:12px}
-.store-card.blocked{opacity:.35;border-color:#331111}
-#scanner{width:100%;aspect-ratio:1;background:#000;border-radius:16px;border:1px solid #222;overflow:hidden;display:grid;place-items:center}
-</style>
-</head><body>
-<div class="top"><span id="clock">ZONDI SECURE • ENC ON</span><span id="conn" class="badge">Offline</span></div>
+# zondi.py — ZONDI SECURE BACKEND — FIXED #1 NFC + #2 RADIO LAPTOP->PHONE
+import os, time, jwt, datetime
+from functools import wraps
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from flask_socketio import SocketIO, join_room, leave_room, emit
 
-<div class="launcher" id="home">
-<div style="text-align:center;margin:6px 0 14px;opacity:.4;font-size:10px;letter-spacing:2px">ZONDI OS • DESIGNED BY G.V MKHWANAZI™ • SUPER ZOOM</div>
-<div class="grid">
-<button class="app" onclick="openView('mapView')"><div class="icon gold">🗺️</div><div class="label">Live Map</div></button>
-<button class="app" onclick="openView('radioView')"><div class="icon gold">📻</div><div class="label">Z-Radio</div></button>
-<button class="app" onclick="openView('qrView')"><div class="icon">📷</div><div class="label">QR Patrol</div></button>
-<button class="app" onclick="openView('sosView')"><div class="icon red">🆘</div><div class="label">SOS</div></button>
-<button class="app" onclick="openView('clientsView')"><div class="icon blue">👥</div><div class="label">Clients</div></button>
-<button class="app" onclick="openView('incidentView')"><div class="icon">📝</div><div class="label">Incident</div></button>
-<button class="app" onclick="openView('bodycamView')"><div class="icon">🎥</div><div class="label">BodyCam</div></button>
-<button class="app" onclick="toggleTorch()"><div class="icon">🔦</div><div class="label">Torch</div></button>
-<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff">🧰</div><div class="label">Z-Tools</div></button>
-<button class="app" onclick="openView('chromeView')"><div class="icon" style="background:#fff;color:#000">🌐</div><div class="label">Chrome</div></button>
-<button class="app" onclick="openView('weatherView')"><div class="icon">⛅</div><div class="label">Weather</div></button>
-<button class="app" onclick="openView('settingsView')"><div class="icon">⚙️</div><div class="label">Settings</div></button>
-</div>
-</div>
+app = Flask(__name__, static_folder='.', static_url_path='')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'zondi-super-secret-2025')
+CORS(app, supports_credentials=True)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
 
-<div class="view" id="mapView"><div class="view-head"><b>🗺️ Live Tracking • Super Zoom</b><button class="btn" onclick="closeViews()">✕ Close</button></div>
-<div style="padding:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fit">⌗ Fit clients</button><button class="btn" id="locate">📍 My location</button><button class="btn" id="sat">🛰️ Satellite</button><button class="btn gold" id="share">Start patrol location</button></div>
-<div id="map"></div><div id="clients" style="padding:12px"></div></div>
+# --- IN-MEMORY STORE (replace with Supabase/Postgres later) ---
+clients_live = {} # user_id -> {user_id, name, email, lat, lng, time, channel}
+sos_feed = []
+patrol_scans = []
+incidents = []
+radio_history = [] # {channel, from, time, type}
 
-<div class="view" id="radioView"><div class="view-head"><b>📻 YANTON Radio</b><span class="badge live" id="radioStatus">Ready</span><button class="btn" onclick="closeViews()">✕</button></div>
-<div style="padding:14px"><select id="channel" style="width:100%;background:#0b0b09;color:#fff;border:1px solid #2a2a2a;padding:12px;border-radius:12px"><option value="1">CH 1 — Alpha</option><option value="2">CH 2 — Response</option><option value="3">CH 3 — Command</option><option value="4">CH 4 — Private</option></select>
-<button id="ptt" style="width:100%;min-height:160px;margin-top:14px;border-radius:24px;background:radial-gradient(#2a2a2a,#0a0a0a);border:2px solid #333;color:var(--gold);font-weight:900;font-size:20px">HOLD TO TRANSMIT</button>
-<div id="radioFeed" style="margin-top:12px"></div></div></div>
+JWT_SECRET = app.config['SECRET_KEY']
 
-<div class="view" id="qrView"><div class="view-head"><b>📷 Patrol Scanner • QR + NFC</b><button class="btn" onclick="closeViews()">✕</button></div>
-<div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn gold" id="qrBtn" onclick="startScanner('qr')">QR Checkpoint</button><button class="btn" id="nfcBtn" onclick="startScanner('nfc')">NFC Tap</button><button class="btn" onclick="startScanner('id')">ID / Visitor</button></div>
-<div id="scanner"><div style="opacity:.4;text-align:center">📷<br>Tap QR to start<br><small>YANTON side button also works</small></div></div>
-<div style="margin-top:12px;background:#111;border:1px solid #222;border-radius:12px;padding:12px"><div style="font-size:11px;opacity:.6">LAST SCAN</div><div id="lastScan" style="font-size:13px;margin-top:4px">No scan yet</div><div id="scanMeta" style="font-size:11px;opacity:.5;margin-top:4px"></div></div>
-<button class="btn gold" style="width:100%;margin-top:12px;padding:14px" onclick="uploadScan()">✅ Confirm Patrol Point</button>
-<div id="tour" style="margin-top:12px;font-size:11px;opacity:.6"></div></div></div>
-
-<div class="view" id="sosView"><div class="view-head"><b>🚨 Active SOS</b><button class="btn" onclick="closeViews()">✕</button></div><div id="sos" style="padding:12px"></div></div>
-<div class="view" id="clientsView"><div class="view-head"><b>👥 Active Clients</b><button class="btn" onclick="closeViews()">✕</button></div><div id="clients2" style="padding:12px"></div></div>
-<div class="view" id="incidentView"><div class="view-head"><b>📝 Incident Report</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><textarea id="incidentText" placeholder="Describe incident..." style="width:100%;height:120px;background:#111;border:1px solid #222;color:#fff;border-radius:10px;padding:10px"></textarea><button class="btn gold" style="width:100%;margin-top:10px" onclick="submitIncident()">Submit</button></div></div>
-<div class="view" id="toolsView"><div class="view-head"><b>🧰 Z-Tools Store — Security Only</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:10px;font-size:11px;opacity:.6">Games, TikTok, Social blocked by policy. Only security tools.</div><div class="store-grid" id="storeGrid"></div></div>
-<div class="view" id="chromeView"><div class="view-head"><b>🌐 Chrome — Restricted</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><input id="chromeSearch" placeholder="Search Google (security only)" style="width:100%;padding:12px;border-radius:12px;border:1px solid #333;background:#111;color:#fff"><iframe id="chromeFrame" style="width:100%;height:70vh;border:0;background:#fff;border-radius:12px;margin-top:12px" src="https://www.google.com/search?igu=1&q=security+guard+tools"></iframe></div></div>
-<div class="view" id="settingsView"><div class="view-head"><b>⚙️ Settings</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:14px"><div>Logged in as: <b id="me"></b></div><button class="btn" id="logout" style="margin-top:20px;background:#c00;border-color:#c00;width:100%;padding:14px">Sign out</button><div style="margin-top:20px;font-size:10px;opacity:.4">ZONDI OS • YANTON COMPATIBLE • KIOSK MODE READY</div></div></div>
-<div class="view" id="bodycamView"><div class="view-head"><b>🎥 BodyCam</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:20px;text-align:center;opacity:.5">BodyCam live coming — YANTON cam API</div></div>
-<div class="view" id="weatherView"><div class="view-head"><b>⛅ Weather</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:20px;opacity:.5">Weather radar — patrol safe</div></div>
-
-<div class="dock">
-<button class="app" onclick="openView('mapView')"><div class="icon" style="background:#2ecc71;width:52px;height:52px">🗺️</div></button>
-<button class="app" onclick="openView('radioView')"><div class="icon gold" style="width:52px;height:52px">📻</div></button>
-<button class="app" onclick="openView('qrView')"><div class="icon" style="width:52px;height:52px">📷</div></button>
-<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff;width:52px;height:52px">🧰</div></button>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/assets/zondi-radio.js"></script>
-<script>
-// --- CORE - tabs defined FIRST so clicks never die ---
-const token=sessionStorage.getItem('zondi_token')||localStorage.getItem('zondi_token'),raw=sessionStorage.getItem('zondi_user')||localStorage.getItem('zondi_user'),me=raw?JSON.parse(raw):null;
-if(!token||!me||me.role!=='patroller') location.href='/login';
-const $=id=>document.getElementById(id);
-const auth=()=>({Authorization:'Bearer '+token});
-if(me) $('me').textContent=me.name||me.email;
-
-window.openView=id=>{ document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); const el=document.getElementById(id); if(el) el.classList.add('active'); if(id==='mapView' && window.map) setTimeout(()=>{try{map.invalidateSize()}catch{}},300); };
-window.closeViews=()=>document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-
-setInterval(()=>{ try{$('clock').textContent=new Date().toLocaleTimeString()+' • ZONDI SECURE • ENC ON';}catch{}},1000);
-
-// --- MAP SAFE ---
-let map, street, sat, isSat=false;
-try{
-  map=L.map('map',{maxZoom:20,minZoom:3}).setView([-26.171,27.86],18);
-  street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19});
-  sat=L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{subdomains:['mt0','mt1','mt2','mt3'],maxZoom:20});
-  street.addTo(map); window.map=map;
-  $('sat').onclick=()=>{ if(!isSat){map.removeLayer(street);sat.addTo(map);$('sat').textContent='🗺️ Street';isSat=true;}else{map.removeLayer(sat);street.addTo(map);$('sat').textContent='🛰️ Satellite';isSat=false;}};
-}catch(e){console.warn('map fail',e);}
-
-const clientMarkers=new Map(),clientData=new Map();
-function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
-function upsertClient(x){ if(!map) return; if(x.lat==null||x.lng==null||!x.user_id) return; clientData.set(String(x.user_id),x); let m=clientMarkers.get(String(x.user_id)); if(!m){m=L.marker([x.lat,x.lng]).addTo(map); clientMarkers.set(String(x.user_id),m);} else m.setLatLng([x.lat,x.lng]); m.bindPopup(`<b>${esc(x.name||x.email)}</b>`); renderClients(); }
-function renderClients(){ const h=[...clientData.values()].map(x=>`<div style="padding:10px;border-bottom:1px solid #1a1a1a"><b>${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${esc(x.email)} • ${x.lat?.toFixed(4)},${x.lng?.toFixed(4)}</div></div>`).join('')||'<div style="opacity:.5;padding:10px">No clients</div>'; try{$('clients').innerHTML=h; $('clients2').innerHTML=h;}catch{} }
-async function load(){ try{ let a=await fetch('/api/location/live',{headers:auth()}); if(a.ok)(await a.json()).forEach(upsertClient); let c=await fetch('/api/sos-feed',{headers:auth()}); if(c.ok){ let sos=await c.json(); $('sos').innerHTML=sos.filter(x=>x.status==='active').slice(-20).map(x=>`<div style="padding:10px;border:1px solid #331;background:#1a0a0a;border-radius:10px;margin-bottom:8px"><b>🚨 ${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${new Date(x.time).toLocaleString()}</div></div>`).join('')||'No active SOS'; } }catch{} }
-try{ $('fit').onclick=()=>{ let pts=[...clientMarkers.values()].map(m=>m.getLatLng()); if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:20}); }; $('locate').onclick=()=>navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],20)); }catch{}
-let watch=null;
-try{ $('share').onclick=()=>{ if(watch){navigator.geolocation.clearWatch(watch); watch=null; $('share').textContent='Start patrol location'; $('share').className='btn gold'; $('conn').textContent='Offline'; return;} watch=navigator.geolocation.watchPosition(async p=>{ try{ await fetch('/api/patroller-ping',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})}); $('conn').textContent='Online'; $('conn').className='badge live'; }catch{} },{},{enableHighAccuracy:true}); $('share').textContent='Stop patrol'; }; }catch{}
-
-// --- RADIO SAFE ---
-try{
-  const socket=io({auth:{token},transports:['websocket','polling']});
-  socket.on('connect',()=>{ $('conn').textContent='Online'; $('conn').className='badge live'; try{socket.emit('join_channel',{channel:$('channel').value,auth:{token}})}catch{} });
-  socket.on('disconnect',()=>{ $('conn').textContent='Offline'; $('conn').className='badge'; });
-  if(window.initZondiRadio) window.initZondiRadio({socket,token,user:me,statusElId:'radioStatus',feedElId:'radioFeed'});
-  window._socket=socket;
-}catch(e){ console.warn('radio fail',e); }
-
-// --- SCANNER FIXED - NO POPUP, TABS SAFE ---
-let lastScanData=null,lastPos=null;
-window.startScanner=async mode=>{
-  const div=$('scanner');
-  if(mode==='nfc'){
-    const btn=$('nfcBtn');
-    try{
-      if(!('NDEFReader' in window)) throw new Error('No API');
-      const r=new NDEFReader(); await r.scan();
-      $('lastScan').textContent='Hold to NFC tag...';
-      r.onreading=e=>{ lastScanData=e.serialNumber||('NFC-'+Date.now()); $('lastScan').textContent='NFC: '+lastScanData; navigator.geolocation.getCurrentPosition(p=>{ lastPos=p; $('scanMeta').textContent=new Date().toLocaleString()+' • GPS '+p.coords.latitude.toFixed(5); }); };
-      return;
-    }catch(err){
-      console.log('NFC unsupported',err.message);
-      if(btn){ btn.style.opacity='0.25'; btn.style.pointerEvents='none'; btn.textContent='🚫 NFC N/A'; }
-      $('lastScan').textContent='NFC not available on this device — using QR';
-      mode='qr';
+def make_token(user):
+    payload = {
+        'user_id': user['user_id'],
+        'email': user['email'],
+        'name': user.get('name',''),
+        'role': user.get('role','patroller'),
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
     }
-  }
-  // QR
-  try{
-    if(typeof Html5Qrcode==='undefined'){ div.innerHTML='<div style="padding:30px;text-align:center">QR lib failed to load<br>Check internet</div>'; return; }
-    div.innerHTML='<div id="reader" style="width:100%"></div>';
-    const qr=new Html5Qrcode('reader');
-    qr.start({facingMode:'environment'},{fps:10,qrbox:250},decoded=>{
-      lastScanData=decoded; $('lastScan').textContent='QR: '+decoded; $('scanMeta').textContent=new Date().toLocaleString()+' • '+me.name;
-      navigator.geolocation.getCurrentPosition(p=>{ lastPos=p; $('scanMeta').textContent+=' • '+p.coords.latitude.toFixed(5)+','+p.coords.longitude.toFixed(5); });
-      try{qr.stop();}catch{} const rd=document.getElementById('reader'); if(rd) rd.remove();
-    },()=>{});
-  }catch(e){ div.innerHTML='Camera permission needed'; }
-};
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
 
-window.uploadScan=async()=>{
-  if(!lastScanData){alert('Scan first');return;}
-  if(!lastPos){alert('Waiting GPS...');return;}
-  try{
-    await fetch('/api/patrol-scan',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,acc:lastPos.coords.accuracy,officer:me.email,time:new Date().toISOString()})});
-    alert('Patrol point logged ✅'); closeViews();
-  }catch(e){ localStorage.setItem('zondi_pending_scan',JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,time:Date.now()})); alert('Saved offline - will sync'); }
-};
+def decode_token(req):
+    auth = req.headers.get('Authorization','')
+    if not auth.startswith('Bearer '): return None
+    try:
+        tok = auth.split(' ')[1]
+        return jwt.decode(tok, JWT_SECRET, algorithms=['HS256'])
+    except: return None
 
-// --- OTHER APPS SAFE ---
-try{
-  const TOOLS=[{id:'com.flashlight.torch',name:'Super Torch',cat:'security',icon:'🔦'},{id:'com.melstudio.gpstest',name:'GPS Test',cat:'security',icon:'🛰️'},{id:'com.google.android.apps.translate',name:'Translate',cat:'security',icon:'🌍'},{id:'com.weather.forecast',name:'Weather Radar',cat:'security',icon:'⛅'},{id:'com.firstaid.app',name:'First Aid',cat:'security',icon:'🩺'},{id:'com.secure.notes',name:'Secure Notes',cat:'security',icon:'📝'},{id:'com.candy.crush',name:'Candy Crush',cat:'game',icon:'🍬'},{id:'com.tiktok.a',name:'TikTok',cat:'social',icon:'🎵'}];
-  $('storeGrid').innerHTML=TOOLS.map(t=>{ const blocked=['game','social','music'].includes(t.cat); return `<div class="store-card ${blocked?'blocked':''}"><div style="font-size:26px">${t.icon}</div><div style="font-weight:700;font-size:12px;margin-top:4px">${t.name}</div><div style="font-size:10px;opacity:.5">${t.cat.toUpperCase()}</div>${blocked?`<div style="margin-top:8px;color:#ff6b6b;font-size:11px">⛔ Blocked by ZONDI policy</div>`:`<button class="btn" style="margin-top:8px;width:100%;background:#0a84ff" onclick="window.open('https://play.google.com/store/apps/details?id=${t.id}','_blank')">Install</button>`}</div>` }).join('');
-}catch{}
-try{ $('chromeSearch').addEventListener('keydown',e=>{ if(e.key==='Enter'){ let q=e.target.value.toLowerCase(); if(/game|tiktok|instagram|facebook|porn|bet|casino/i.test(q)){alert('Blocked by ZONDI policy');return;} $('chromeFrame').src='https://www.google.com/search?igu=1&q='+encodeURIComponent(q); } }); }catch{}
-window.toggleTorch=async()=>{ try{ const s=await navigator.mediaDevices.getUserMedia({video:{torch:true}}); const tr=s.getVideoTracks()[0]; const cap=tr.getCapabilities(); if(cap.torch){ const cur=tr.getSettings().torch; await tr.applyConstraints({advanced:[{torch:!cur}]}); setTimeout(()=>tr.stop(),5000);} else alert('Torch not supported'); }catch(e){alert('Torch needs camera permission');} };
-window.submitIncident=async()=>{ let t=$('incidentText').value; if(!t)return; await fetch('/api/incident',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({text:t,lat:lastPos?.coords.latitude,lng:lastPos?.coords.longitude})}); alert('Incident logged'); closeViews(); };
-$('logout').onclick=()=>{sessionStorage.clear();localStorage.clear();location.href='/login';};
-load(); setInterval(load,15000);
-</script></body></html>
+def auth_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        user = decode_token(request)
+        if not user: return jsonify({'error':'unauthorized'}), 401
+        request.user = user
+        return f(*args, **kwargs)
+    return wrapper
+
+# --- USERS (demo) - your real login uses Supabase ---
+DEMO_USERS = {
+    'patroller@zondi.co.za': {'user_id':'p1','email':'patroller@zondi.co.za','name':'Patroller 1','role':'patroller','password':'zondi123'},
+    'admin@zondi.co.za': {'user_id':'admin1','email':'admin@zondi.co.za','name':'Admin','role':'admin','password':'zondi123'}
+}
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json or {}
+    email = data.get('email','').lower()
+    pwd = data.get('password','')
+    u = DEMO_USERS.get(email)
+    if not u or u['password']!=pwd:
+        return jsonify({'error':'invalid credentials'}), 401
+    tok = make_token(u)
+    return jsonify({'token':tok, 'user':{'user_id':u['user_id'],'email':u['email'],'name':u['name'],'role':u['role']}})
+
+# --- PATROLLER PING - LIVE LOCATION ---
+@app.route('/api/patroller-ping', methods=['POST'])
+@auth_required
+def patroller_ping():
+    data = request.json or {}
+    uid = request.user['user_id']
+    clients_live[uid] = {
+        'user_id': uid,
+        'name': request.user.get('name'),
+        'email': request.user.get('email'),
+        'lat': data.get('lat'),
+        'lng': data.get('lng'),
+        'acc': data.get('acc', 0),
+        'time': datetime.datetime.utcnow().isoformat(),
+        'channel': data.get('channel','1')
+    }
+    # broadcast to map
+    socketio.emit('client:update', clients_live[uid])
+    return jsonify({'ok':True})
+
+@app.route('/api/location/live')
+@auth_required
+def live():
+    return jsonify(list(clients_live.values()))
+
+@app.route('/api/sos-feed')
+@auth_required
+def sos():
+    return jsonify(sos_feed[-100:])
+
+@app.route('/api/sos', methods=['POST'])
+@auth_required
+def create_sos():
+    data = request.json or {}
+    item = {
+        'user_id': request.user['user_id'],
+        'name': request.user.get('name'),
+        'email': request.user.get('email'),
+        'lat': data.get('lat'),
+        'lng': data.get('lng'),
+        'time': datetime.datetime.utcnow().isoformat(),
+        'status': 'active',
+        'msg': data.get('msg','SOS')
+    }
+    sos_feed.append(item)
+    socketio.emit('sos:new', item)
+    return jsonify({'ok':True, 'sos':item})
+
+# --- PATROL SCAN ---
+@app.route('/api/patrol-scan', methods=['POST'])
+@auth_required
+def patrol_scan():
+    data = request.json or {}
+    item = {
+        'user_id': request.user['user_id'],
+        'officer': data.get('officer'),
+        'code': data.get('code'),
+        'lat': data.get('lat'),
+        'lng': data.get('lng'),
+        'time': data.get('time') or datetime.datetime.utcnow().isoformat(),
+        'acc': data.get('acc')
+    }
+    patrol_scans.append(item)
+    socketio.emit('patrol:scan', item)
+    return jsonify({'ok':True})
+
+@app.route('/api/incident', methods=['POST'])
+@auth_required
+def incident():
+    data = request.json or {}
+    item = {
+        'user_id': request.user['user_id'],
+        'text': data.get('text'),
+        'lat': data.get('lat'),
+        'lng': data.get('lng'),
+        'time': datetime.datetime.utcnow().isoformat()
+    }
+    incidents.append(item)
+    return jsonify({'ok':True})
+
+# ================= RADIO - FIX #2 LAPTOP -> PHONE =================
+# Laptop and phone join same room "channel_1" etc, then any audio/text relays to whole room
+
+@socketio.on('connect')
+def on_connect(auth=None):
+    # auth can be {token}
+    token = None
+    if auth and 'token' in auth: token = auth['token']
+    else: token = request.args.get('token')
+    if not token:
+        # allow but mark offline
+        return True
+    try:
+        user = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        request.user_id = user['user_id']
+        print(f"[RADIO] connect {user['email']}")
+    except Exception as e:
+        print(f"[RADIO] connect bad token {e}")
+    emit('connected', {'ok':True})
+    return True
+
+@socketio.on('join_channel')
+def on_join_channel(data):
+    try:
+        channel = str(data.get('channel','1'))
+        token = data.get('auth',{}).get('token') or (data.get('token'))
+        user = None
+        if token:
+            try: user = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            except: pass
+        room = f'channel_{channel}'
+        join_room(room)
+        print(f"[RADIO] {user['email'] if user else 'anon'} joined {room}")
+        emit('channel:joined', {'channel':channel, 'room':room}, room=room)
+        # announce presence
+        socketio.emit('radio:presence', {'channel':channel, 'user': user, 'action':'joined'}, room=room)
+    except Exception as e:
+        print(f"join_channel err {e}")
+
+@socketio.on('radio:ptt')
+def on_ptt(data):
+    # PTT start/stop event
+    try:
+        ch = str(data.get('channel','1'))
+        room = f'channel_{ch}'
+        # relay to everyone EXCEPT sender? we relay to ALL including sender for sync
+        payload = {
+            'channel': ch,
+            'user_id': getattr(request, 'user_id', 'unknown'),
+            'user': data.get('user'),
+            'action': data.get('action','start'), # start / stop
+            'time': datetime.datetime.utcnow().isoformat()
+        }
+        socketio.emit('radio:ptt', payload, room=room, include_self=False)
+        print(f"[RADIO PTT] {payload}")
+    except Exception as e:
+        print(f"ptt err {e}")
+
+@socketio.on('radio:audio')
+def on_audio(data):
+    # THIS IS THE FIX for laptop -> phone
+    # data: {channel, audio (base64), user, type}
+    try:
+        ch = str(data.get('channel','1'))
+        room = f'channel_{ch}'
+        payload = {
+            'channel': ch,
+            'audio': data.get('audio'),
+            'from': data.get('user') or getattr(request, 'user_id', 'unknown'),
+            'time': datetime.datetime.utcnow().isoformat(),
+            'type': data.get('type','audio/webm')
+        }
+        # BROADCAST TO ROOM - this makes laptop audio reach phones in same channel
+        socketio.emit('radio:audio', payload, room=room, include_self=False)
+        # also legacy event for old frontend
+        socketio.emit('radio:rx', payload, room=room, include_self=False)
+        print(f"[RADIO AUDIO] relayed to {room} len={len(payload.get('audio',''))}")
+    except Exception as e:
+        print(f"radio:audio err {e}")
+
+@socketio.on('radio:text')
+def on_text(data):
+    try:
+        ch = str(data.get('channel','1'))
+        room = f'channel_{ch}'
+        payload = {
+            'channel': ch,
+            'text': data.get('text'),
+            'from': data.get('user'),
+            'time': datetime.datetime.utcnow().isoformat()
+        }
+        socketio.emit('radio:text', payload, room=room, include_self=False)
+        radio_history.append(payload)
+    except Exception as e:
+        print(f"radio:text err {e}")
+
+@socketio.on('yanton_key')
+def on_yanton_key(data):
+    # YANTON side button maps to PTT
+    try:
+        ch = str(data.get('channel','1'))
+        room = f'channel_{ch}'
+        socketio.emit('yanton_key', data, room=room, include_self=False)
+    except: pass
+
+# --- STATIC ---
+@app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
+
+@app.route('/patrol')
+def patrol():
+    return send_from_directory('.', 'patrol.html')
+
+@app.route('/assets/<path:path>')
+def assets(path):
+    return send_from_directory('assets', path)
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    print(f"ZONDI SECURE running on {port} — RADIO FIX #2 ENABLED")
+    socketio.run(app, host='0.0.0.0', port=port)
