@@ -1,236 +1,81 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Zondi — Patrol OS</title><link rel="manifest" href="/assets/manifest.json">
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zondi — Patrol Portal</title>
 <link rel="stylesheet" href="/assets/zondi-theme.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<style>
-:root{--gold:#d4a73a}*{box-sizing:border-box}
-body{margin:0;background:#050505;color:#fff;font-family:system-ui;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
-.top{height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 14px;font-size:11px;background:#000;border-bottom:1px solid #1e1e1e;z-index:10}
-.launcher{flex:1;overflow:auto;padding:14px 12px 110px;background:radial-gradient(120% 120% at 50% 0%,#1c1c1c 0%,#080808 100%)}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:420px;margin:0 auto}
-.app{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;color:#fff;cursor:pointer;text-decoration:none}
-.icon{width:60px;height:60px;border-radius:16px;background:#111;border:1px solid #2a2a2a;display:grid;place-items:center;font-size:26px;box-shadow:0 6px 14px rgba(0,0,0,.6)}
-.icon.gold{background:radial-gradient(120% 120% at 50% 0%,#f5d06a 0%,#d4a73a 55%,#8a6a20 100%);color:#000}
-.icon.red{background:#2a0f0f;border-color:#4a1a1a}
-.icon.blue{background:#0f1a2a}
-.label{font-size:10px;opacity:.85;text-align:center}
-.dock{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);width:92%;max-width:400px;background:rgba(255,255,255,.15);backdrop-filter:blur(20px);border-radius:26px;padding:8px 10px;display:flex;justify-content:space-around;border:1px solid rgba(255,255,255,.2);z-index:60}
-.view{display:none;position:fixed;inset:0;background:#080808;z-index:100;overflow:auto;padding-bottom:90px}
-.view.active{display:block}
-.view-head{position:sticky;top:0;background:#0f0f0f;border-bottom:1px solid #1e1e1e;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;z-index:5}
-.btn{padding:9px 14px;border-radius:10px;border:1px solid #2a2a2a;background:#151515;color:#fff;font-size:12px;cursor:pointer}
-.btn.gold{background:var(--gold);color:#000;font-weight:800;border-color:var(--gold)}
-.badge{font-size:10px;padding:4px 8px;border-radius:99px;background:#1a1a1a;border:1px solid #2a2a2a}
-.badge.live{background:var(--gold);color:#000;font-weight:800}
-#map{height:58vh;min-height:400px;background:#111;border-radius:12px;margin:10px}
-.store-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
-.store-card{background:#111;border:1px solid #222;border-radius:14px;padding:12px}
-.store-card.blocked{opacity:.35;border-color:#331111}
-#scanner{width:100%;aspect-ratio:1;background:#000;border-radius:16px;border:1px solid #222;overflow:hidden;display:grid;place-items:center}
-/* RADIO NET NEW */
-.radio-net{background:#0f0f0f;border:1px solid #222;border-radius:14px;padding:12px;margin-bottom:12px}
-.net-head{display:flex;align-items:center;gap:8px;font-size:12px}
-.dot{width:10px;height:10px;border-radius:50%;background:#555}
-.dot.on{background:#00ff88;box-shadow:0 0 8px #00ff88}
-.badge-net{background:#FFC300;color:#000;padding:2px 8px;border-radius:20px;font-weight:900;font-size:11px}
-.radio-list{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-.ru{background:#1c1c1c;border:1px solid #2a2a2a;padding:6px 10px;border-radius:30px;font-size:11px;display:flex;gap:6px;align-items:center}
-.ru.tx{border-color:#FFC300;box-shadow:0 0 10px #FFC30044;color:#FFC300}
-#waveCanvas{width:100%;height:70px;background:radial-gradient(#111,#000);border-radius:8px;margin:6px 0;display:block}
-.ptt{width:100%;min-height:140px;margin-top:10px;border-radius:24px;background:radial-gradient(#2a2a2a,#0a0a0a);border:2px solid #333;color:#FFC300;font-weight:900;font-size:20px}
-.ptt:active{background:#FFC300;color:#000;box-shadow:0 0 20px #FFC300}
-</style>
-</head><body>
-<div class="top"><span id="clock">ZONDI SECURE • ENC ON</span><span id="conn" class="badge">Offline</span></div>
-<div class="launcher" id="home">
-<div style="text-align:center;margin:6px 0 14px;opacity:.4;font-size:10px;letter-spacing:2px">ZONDI OS • DESIGNED BY G.V MKHWANAZI™ • SUPER ZOOM</div>
-<div class="grid">
-<button class="app" onclick="openView('mapView')"><div class="icon gold">🗺️</div><div class="label">Live Map</div></button>
-<button class="app" onclick="openView('radioView')"><div class="icon gold">📻</div><div class="label">Z-Radio</div></button>
-<button class="app" onclick="openView('qrView')"><div class="icon">📷</div><div class="label">QR Patrol</div></button>
-<button class="app" onclick="openView('sosView')"><div class="icon red">🆘</div><div class="label">SOS</div></button>
-<button class="app" onclick="openView('clientsView')"><div class="icon blue">👥</div><div class="label">Clients</div></button>
-<button class="app" onclick="openView('incidentView')"><div class="icon">📝</div><div class="label">Incident</div></button>
-<button class="app" onclick="openView('bodycamView')"><div class="icon">🎥</div><div class="label">BodyCam</div></button>
-<button class="app" onclick="toggleTorch()"><div class="icon">🔦</div><div class="label">Torch</div></button>
-<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff">🧰</div><div class="label">Z-Tools</div></button>
-<button class="app" onclick="openView('chromeView')"><div class="icon" style="background:#fff;color:#000">🌐</div><div class="label">Chrome</div></button>
-<button class="app" onclick="openView('weatherView')"><div class="icon">⛅</div><div class="label">Weather</div></button>
-<button class="app" onclick="openView('settingsView')"><div class="icon">⚙️</div><div class="label">Settings</div></button>
-</div>
-</div>
-  
-<div class="view" id="mapView"><div class="view-head"><b>🗺️ Live Tracking</b><button class="btn" onclick="closeViews()">✕</button></div>
-<div style="padding:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fit">⌗ Fit</button><button class="btn" id="locate">📍 Me</button><button class="btn" id="sat">🛰️ Satellite</button><button class="btn gold" id="share">Start location</button></div>
-<div id="map"></div><div id="clients" style="padding:12px"></div></div>
-
-<div class="view" id="radioView"><div class="view-head"><b>📻 ZONDI Radio Net</b><span class="badge live" id="radioStatus">Scanning...</span><button class="btn" onclick="closeViews()">✕</button></div>
-<div style="padding:14px">
-  <div class="radio-net">
-    <div class="net-head"><span id="netDot" class="dot"></span><b id="netText">RADIO NET</b> — <span id="netStatus">Searching...</span> <span id="netCount" class="badge-net">0</span></div>
-    <div id="radioList" class="radio-list"><span style="font-size:11px;color:#666">Scanning for radios...</span></div>
-    <canvas id="waveCanvas" width="340" height="70"></canvas>
-    <select id="channel" style="width:100%;background:#0b0b09;color:#fff;border:1px solid #2a2a2a;padding:12px;border-radius:12px;margin-bottom:8px"><option value="1">CH 1 — Alpha</option><option value="2">CH 2 — Response</option><option value="3">CH 3 — Command</option><option value="4">CH 4 — Private</option></select>
-  </div>
-  <button id="ptt" class="ptt">🎙️ HOLD TO TRANSMIT</button>
-  <div id="radioFeed" style="margin-top:12px"></div>
-</div></div>
-
-<div class="view" id="qrView"><div class="view-head"><b>📷 Patrol Scanner</b><button class="btn" onclick="closeViews()">✕</button></div>
-<div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn gold" onclick="startScanner('qr')">QR Checkpoint</button><button class="btn" id="nfcBtn" onclick="startScanner('nfc')">NFC Tap</button><button class="btn" onclick="startScanner('id')">ID / Visitor</button></div>
-<div id="scanner"><div style="opacity:.4;text-align:center">📷<br>Tap QR to start</div></div>
-<div style="margin-top:12px;background:#111;border:1px solid #222;border-radius:12px;padding:12px"><div style="font-size:11px;opacity:.6">LAST SCAN</div><div id="lastScan" style="font-size:13px;margin-top:4px">No scan yet</div><div id="scanMeta" style="font-size:11px;opacity:.5;margin-top:4px"></div></div>
-<button class="btn gold" style="width:100%;margin-top:12px;padding:14px" onclick="uploadScan()">✅ Confirm Patrol Point</button></div></div>
-
-<div class="view" id="sosView"><div class="view-head"><b>🚨 Active SOS</b><button class="btn" onclick="closeViews()">✕</button></div><div id="sos" style="padding:12px"></div></div>
-<div class="view" id="clientsView"><div class="view-head"><b>👥 Active Clients</b><button class="btn" onclick="closeViews()">✕</button></div><div id="clients2" style="padding:12px"></div></div>
-<div class="view" id="incidentView"><div class="view-head"><b>📝 Incident Report</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><textarea id="incidentText" placeholder="Describe incident..." style="width:100%;height:120px;background:#111;border:1px solid #222;color:#fff;border-radius:10px;padding:10px"></textarea><button class="btn gold" style="width:100%;margin-top:10px" onclick="submitIncident()">Submit</button></div></div>
-<div class="view" id="bodycamView"><div class="view-head"><b>🎥 BodyCam</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px;opacity:.6">BodyCam — YANTON integration ready.</div></div>
-<div class="view" id="weatherView"><div class="view-head"><b>⛅ Weather</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><div style="opacity:.6">Weather: Bloemfontein — use Chrome for full forecast</div></div></div>
-<div class="view" id="toolsView"><div class="view-head"><b>🧰 Z-Tools Store</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:10px;font-size:11px;opacity:.6">Games, TikTok blocked by policy.</div><div class="store-grid" id="storeGrid"></div></div>
-<div class="view" id="chromeView"><div class="view-head"><b>🌐 Chrome — Restricted</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:12px"><input id="chromeSearch" placeholder="Search (security only)" style="width:100%;padding:12px;border-radius:12px;border:1px solid #333;background:#111;color:#fff"><iframe id="chromeFrame" style="width:100%;height:70vh;border:0;background:#fff;border-radius:12px;margin-top:12px" src="https://www.google.com/search?igu=1&q=security+guard+tools"></iframe></div></div>
-<div class="view" id="settingsView"><div class="view-head"><b>⚙️ Settings</b><button class="btn" onclick="closeViews()">✕</button></div><div style="padding:14px"><div>Logged in as: <b id="me"></b></div><button class="btn" id="logout" style="margin-top:20px;background:#c00;border-color:#c00;width:100%;padding:14px">Sign out</button></div></div>
-
-<div class="dock">
-<button class="app" onclick="openView('mapView')"><div class="icon" style="background:#2ecc71;width:52px;height:52px">🗺️</div></button>
-<button class="app" onclick="openView('radioView')"><div class="icon gold" style="width:52px;height:52px">📻</div></button>
-<button class="app" onclick="openView('qrView')"><div class="icon" style="width:52px;height:52px">📷</div></button>
-<button class="app" onclick="openView('toolsView')"><div class="icon" style="background:#0a84ff;width:52px;height:52px">🧰</div></button>
-</div>
-
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+<a class="brand" href="/"><span class="brand-mark"><img src="/assets/zondi-logo.png"></span><span><div class="brand-title">ZONDI</div><div class="brand-sub">PATROL PORTAL</div></span></a>
+<div class="row"><a class="btn" href="/radio">📻 Radio Net</a><button class="btn" id="logout">Sign out</button></div>
+</div></header>
+<main class="shell">
+<div class="quicknav"><a class="btn" href="/patrol">👮 Patrol Home</a><a class="btn" href="/">Zondi Home</a></div>
+<div id="status" class="status hidden" style="margin-top:12px"></div>
+
+<section class="grid12" style="margin-top:12px">
+<div class="panel panel-pad span8" style="height:520px;display:flex;flex-direction:column">
+<div class="row-between"><b>Live Client Map</b><span class="badge live" id="clientCount">0 CLIENTS</span></div>
+<div id="map" style="flex:1;border-radius:14px;margin-top:10px;min-height:380px"></div>
+</div>
+<div class="panel panel-pad span4" style="height:520px;overflow:auto">
+<div class="row-between"><b>SOS Feed</b><button class="btn small" id="clearSos">Clear</button></div>
+<div id="sosFeed" style="margin-top:10px"></div>
+<div class="notice" style="margin-top:12px">SOS appears instantly. Click to fly to client.</div>
+</div>
+</section>
+<footer class="footer">ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span></footer>
+</main>
 <script>
+const getToken=()=>localStorage.getItem('zondi_token')||sessionStorage.getItem('zondi_token');
+const getUser=()=>{try{return JSON.parse(localStorage.getItem('zondi_user')||sessionStorage.getItem('zondi_user'))}catch{return null}};
 const $=id=>document.getElementById(id);
-window.openView=id=>{const el=document.getElementById(id); if(!el) return; document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); el.classList.add('active'); if(id==='mapView') setTimeout(()=>{try{map.invalidateSize()}catch{}},350); if(id==='radioView') heartbeat(true);};
-window.closeViews=()=>document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-
-const token=localStorage.getItem('zondi_token')||sessionStorage.getItem('zondi_token');
-const raw=localStorage.getItem('zondi_user')||sessionStorage.getItem('zondi_user');
-let me=null; try{me=raw?JSON.parse(raw):null;}catch{}
-if(!token){ location.href='/login'; }
-if(me && me.role!=='patroller' && me.role!=='dev'){ alert('Patrol only for patrollers. Your role: '+me.role); location.href='/clients'; }
-if($('me')) $('me').textContent=me?.name||me?.email||'';
-const auth=()=>({Authorization:'Bearer '+token});
-setInterval(()=>{const c=$('clock'); if(c) c.textContent=new Date().toLocaleTimeString()+' • ZONDI SECURE • ENC ON';},1000);
-
-const map=L.map('map',{maxZoom:20,minZoom:3}).setView([-29.0852,26.1596],13);
-const street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20});const sat=L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{subdomains:['mt0','mt1','mt2','mt3'],maxZoom:20});street.addTo(map);
-let isSat=false; if($('sat')) $('sat').onclick=()=>{if(!isSat){map.removeLayer(street);sat.addTo(map);$('sat').textContent='🗺️ Street';isSat=true;}else{map.removeLayer(sat);street.addTo(map);$('sat').textContent='🛰️ Satellite';isSat=false;}};
-const clientMarkers=new Map(),clientData=new Map();
-function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
-function upsertClient(x){if(x.lat==null||x.lng==null) return; const id=String(x.email||x.user_id); clientData.set(id,x); let m=clientMarkers.get(id); if(!m){m=L.marker([x.lat,x.lng]).addTo(map);clientMarkers.set(id,m);}else m.setLatLng([x.lat,x.lng]); m.bindPopup(`<b>${esc(x.name||x.email)}</b>`); renderClients();}
-function renderClients(){const h=[...clientData.values()].map(x=>`<div style="padding:10px;border-bottom:1px solid #1a1a1a"><b>${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${x.lat?.toFixed(4)},${x.lng?.toFixed(4)}</div></div>`).join('')||'<div style="opacity:.5;padding:10px">No clients</div>'; if($('clients')) $('clients').innerHTML=h; if($('clients2')) $('clients2').innerHTML=h;}
-async function load(){try{let a=await fetch('/api/location/live',{headers:auth()}); if(a.ok){let j=await a.json(); (j.locations||j).forEach(upsertClient);} let c=await fetch('/api/sos-feed',{headers:auth()}); if(c.ok){let sos=await c.json(); if($('sos')) $('sos').innerHTML=sos.slice(-20).map(x=>`<div style="padding:10px;border:1px solid #331;background:#1a0a0a;border-radius:10px;margin-bottom:8px"><b>🚨 ${esc(x.name||x.email)}</b><div style="font-size:11px;opacity:.6">${new Date(x.time||Date.now()).toLocaleString()}</div></div>`).join('')||'No active SOS';}}catch{}}
-if($('fit')) $('fit').onclick=()=>{let pts=[...clientMarkers.values()].map(m=>m.getLatLng()); if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[30,30]});};
-if($('locate')) $('locate').onclick=()=>navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],20));
-let watch=null; if($('share')) $('share').onclick=()=>{if(watch){navigator.geolocation.clearWatch(watch);watch=null;$('share').textContent='Start location';$('conn').textContent='Offline';return;}watch=navigator.geolocation.watchPosition(async p=>{try{await fetch('/api/location/update',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})}); if($('conn')){ $('conn').textContent='Online'; $('conn').className='badge live';}}catch{}},{enableHighAccuracy:true});$('share').textContent='Stop patrol';};
-load(); setInterval(load,15000);
-
-// === RADIO NET LOGIC - REAL PRESENCE ===
-const pttBtn=$('ptt'), netDot=$('netDot'), netStatus=$('netStatus'), netCount=$('netCount'), radioList=$('radioList'), waveCanvas=$('waveCanvas'), radioStatus=$('radioStatus'), radioFeed=$('radioFeed');
-const ctx=waveCanvas.getContext('2d');
-let recorder=null,chunks=[], isTx=false, lat=null,lng=null;
-navigator.geolocation.watchPosition(p=>{lat=p.coords.latitude;lng=p.coords.longitude;});
-
-async function heartbeat(tx=false){
+function auth(){const t=getToken();return t?{Authorization:'Bearer '+t}:{}}
+function msg(t,c=''){let s=$('status');s.hidden=false;s.textContent=t;s.className='status '+c}
+(function authorize(){
+  const token=getToken();const user=getUser();
+  if(!token||!user){location.href='/login';return;}
+  if(user.role!=='patroller'&&user.role!=='dev'){location.href='/clients';return;}
+  fetch('/api/me',{headers:auth()}).then(r=>r.json()).then(j=>{if(!j.ok){localStorage.clear();sessionStorage.clear();location.href='/login';}});
+})();
+const map=L.map('map').setView([-29.0,26.0],5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+let markers={};
+async function loadLive(){
   try{
-    const r=await fetch('/api/radio/presence',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({lat,lng,tx})});
+    const r=await fetch('/api/location/live',{headers:auth()});
     const d=await r.json();
     if(!d.ok) return;
-    netDot.className='dot '+(d.connected>1?'on':'');
-    radioStatus.textContent = d.connected>1?`Connected • ${d.connected}`:'Scanning...';
-    netStatus.textContent = d.connected>1?`Connected to ${d.connected-1} radio(s)`:'No other radios online';
-    netCount.textContent = d.connected;
-    if(d.radios.length===0){
-      radioList.innerHTML='<span style="font-size:11px;color:#666">No other guards — open patrol on another phone to see connection</span>';
-    }else{
-      radioList.innerHTML=d.radios.map(u=>`<div class="ru ${u.tx?'tx':''}">${u.tx?'🔴': '📻'} ${esc(u.name)} ${u.tx?'• TRANSMITTING':''}</div>`).join('');
-      if(d.radios.some(u=>u.tx)) startWave(true);
-    }
+    $('clientCount').textContent=d.locations.length+' CLIENTS';
+    const seen=new Set();
+    d.locations.forEach(loc=>{
+      seen.add(loc.email);
+      if(!markers[loc.email]){
+        markers[loc.email]=L.marker([loc.lat,loc.lng]).addTo(map).bindPopup(loc.name||loc.email);
+      }else markers[loc.email].setLatLng([loc.lat,loc.lng]);
+    });
+    Object.keys(markers).forEach(k=>{if(!seen.has(k)){map.removeLayer(markers[k]);delete markers[k];}});
   }catch{}
 }
-function startWave(external=false){
-  let t=0;
-  function draw(){
-    ctx.clearRect(0,0,waveCanvas.width,waveCanvas.height);
-    ctx.strokeStyle=external?'#00ff88':'#FFC300'; ctx.lineWidth=2; ctx.beginPath();
-    for(let i=0;i<waveCanvas.width;i+=3){ const y=35+Math.sin(i*0.05 + t)*18; if(i===0) ctx.moveTo(i,y); else ctx.lineTo(i,y); }
-    ctx.stroke();
-    // pulse dots for each connected radio
-    ctx.fillStyle='#FFC300';
-    const count = parseInt(netCount.textContent||1);
-    for(let k=0;k<Math.min(count,5);k++){ ctx.beginPath(); ctx.arc(20+k*30, 35+Math.sin(t+k)*10, 4,0,Math.PI*2); ctx.fill(); }
-    t+=0.15;
-    if(isTx || external){ requestAnimationFrame(draw); }
-  }
-  draw();
-}
-
-async function startTx(e){
-  e.preventDefault(); if(isTx) return; isTx=true;
-  pttBtn.textContent='🔴 TRANSMITTING — waves to '+ (parseInt(netCount.textContent)-1) +' radio(s)'; pttBtn.dataset.tx='1';
-  heartbeat(true); startWave(false);
+async function loadSos(){
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
-    chunks=[]; recorder=new MediaRecorder(stream,{mimeType:'audio/webm;codecs=opus'});
-    recorder.ondataavailable=ev=>chunks.push(ev.data);
-    recorder.onstop=async()=>{
-      const blob=new Blob(chunks,{type:'audio/webm'}); const fd=new FormData(); fd.append('audio',blob,'r.webm');
-      const res=await fetch('/api/radio/push',{method:'POST',headers:auth(),body:fd}); const d=await res.json();
-      pttBtn.textContent=`📡 Wave sent to ${d.sent_to} radio(s)`;
-      setTimeout(()=>{pttBtn.textContent='🎙️ HOLD TO TRANSMIT'; ctx.clearRect(0,0,waveCanvas.width,waveCanvas.height);},1500);
-    };
-    recorder.start();
-  }catch{ alert('Mic permission needed'); isTx=false; pttBtn.textContent='🎙️ HOLD TO TRANSMIT'; }
-}
-function stopTx(e){ e.preventDefault(); if(!isTx) return; isTx=false; pttBtn.dataset.tx='0'; heartbeat(false); if(recorder && recorder.state==='recording'){recorder.stop(); recorder.stream.getTracks().forEach(t=>t.stop());} }
-
-pttBtn.addEventListener('mousedown',startTx); pttBtn.addEventListener('touchstart',startTx,{passive:false});
-pttBtn.addEventListener('mouseup',stopTx); pttBtn.addEventListener('touchend',stopTx,{passive:false});
-
-setInterval(()=>heartbeat(isTx),4000);
-heartbeat(false);
-
-async function pollFeed(){
-  try{
-    const r=await fetch('/api/radio/feed',{headers:auth()}); const d=await r.json();
-    if(d.ok && d.items){ radioFeed.innerHTML=d.items.slice(-6).reverse().map(i=>`<div style="background:#111;border-left:3px solid #FFC300;padding:8px;border-radius:6px;margin:6px 0;font-size:11px"><b>${esc(i.name)}</b> • ${new Date(i.time).toLocaleTimeString()}<br><audio controls src="${i.url}" style="width:100%;height:28px;margin-top:4px"></audio></div>`).join(''); }
+    const r=await fetch('/api/sos-feed',{headers:auth()});
+    const items=await r.json();
+    $('sosFeed').innerHTML=items.slice(-10).reverse().map(s=>`
+      <div class="notice sos-item" style="cursor:pointer;margin-bottom:8px" onclick="fly(${s.lat},${s.lng})">
+        <b>${s.name||s.email}</b> — SOS<br><span class="mini">${new Date(s.time*1000).toLocaleTimeString()} · ${s.lat?.toFixed?.(4)||''}, ${s.lng?.toFixed?.(4)||''}</span>
+      </div>`).join('')||'<div class="mini">No SOS yet.</div>';
   }catch{}
 }
-setInterval(pollFeed,3500); pollFeed();
-
-// QR etc
-let lastScanData=null,lastPos=null;
-window.startScanner=async mode=>{
-const div=$('scanner');
-if(mode==='nfc'){
-  const btn=$('nfcBtn');
-  try{
-    if(!('NDEFReader' in window)) throw new Error('No NDEF');
-    const r=new NDEFReader(); await r.scan();
-    if($('lastScan')) $('lastScan').textContent='Hold to NFC tag...';
-    r.onreading=e=>{ lastScanData=e.serialNumber||'NFC-'+Date.now(); if($('lastScan')) $('lastScan').textContent='NFC: '+lastScanData; navigator.geolocation.getCurrentPosition(p=>{ lastPos=p; if($('scanMeta')) $('scanMeta').textContent=new Date().toLocaleString()+' • GPS '+p.coords.latitude.toFixed(5); }); };
-  }catch(err){
-    if(btn){ btn.style.opacity='0.25'; btn.style.pointerEvents='none'; btn.textContent='🚫 NFC N/A'; }
-    if($('lastScan')) $('lastScan').textContent='NFC not available — QR fallback';
-  }
-  return;
-}
-div.innerHTML='<div id="reader" style="width:100%"></div>';
-try{
-  const qr=new Html5Qrcode('reader');
-  qr.start({facingMode:'environment'},{fps:10,qrbox:250},decoded=>{ lastScanData=decoded; if($('lastScan')) $('lastScan').textContent='QR: '+decoded; navigator.geolocation.getCurrentPosition(p=>{ lastPos=p; if($('scanMeta')) $('scanMeta').textContent=new Date().toLocaleString()+' • '+p.coords.latitude.toFixed(5); }); try{qr.stop();}catch{} },()=>{});
-}catch{ div.innerHTML='Camera permission needed'; }
-};
-window.uploadScan=async()=>{
-if(!lastScanData){alert('Scan first');return;}
-if(!lastPos){alert('Waiting GPS...');return;}
-try{ await fetch('/api/patrol-scan',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({code:lastScanData,lat:lastPos.coords.latitude,lng:lastPos.coords.longitude,acc:lastPos.coords.accuracy,officer:me.email,time:new Date().toISOString()})}); alert('Patrol point logged ✅'); closeViews(); }catch{ alert('Saved offline'); }
-};
-window.toggleTorch=async()=>{try{const s=await navigator.mediaDevices.getUserMedia({video:{torch:true}});const tr=s.getVideoTracks()[0];if(tr.getCapabilities().torch){const cur=tr.getSettings().torch;await tr.applyConstraints({advanced:[{torch:!cur}]}); setTimeout(()=>tr.stop(),5000);}else alert('Torch not supported');}catch{alert('Torch needs camera permission');}};
-window.submitIncident=async()=>{let t=$('incidentText')?.value;if(!t)return;await fetch('/api/incident',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({text:t,lat:lastPos?.coords.latitude,lng:lastPos?.coords.longitude})});alert('Incident logged');closeViews();};
-if($('logout')) $('logout').onclick=()=>{localStorage.clear();sessionStorage.clear();location.href='/login';};
-</script></body></html>
+window.fly=(lat,lng)=>{ if(lat&&lng) map.flyTo([lat,lng],16); };
+$('clearSos').onclick=()=>$('sosFeed').innerHTML='<div class="mini">Cleared locally.</div>';
+setInterval(loadLive,4000);
+setInterval(loadSos,3000);
+loadLive(); loadSos();
+$('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',headers:auth()})}catch{}localStorage.clear();sessionStorage.clear();location.href='/login';};
+</script>
+</body>
+</html>
