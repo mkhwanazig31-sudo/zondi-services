@@ -12,23 +12,16 @@ const getUser = ()=> { try{ const raw = localStorage.getItem('zondi_user') || se
 const $=id=>document.getElementById(id);let watch=null;let heartbeat=null;let lastSentAt=0;let wakeLock=null;
 function auth(){ const t=getToken(); return t?{Authorization:'Bearer '+t}:{}; }
 function msg(t,c=''){let s=$('status');s.hidden=false;s.textContent=t;s.className='status '+c}
-
-// --- HARD AUTHORIZE (works at midnight, any tab) ---
 (function authorize(){
   const token = getToken();
   const user = getUser();
   if(!token || !user){ location.href='/login'; return; }
-  if(user.role!=='client' && user.role!=='dev'){ // patroller trying to open client page
-    location.href='/patrol';
-    return;
-  }
+  if(user.role!=='client' && user.role!=='dev'){ location.href='/patrol'; return; }
   $('name').textContent=user.name||user.email;
-  // verify token still alive with backend (won't bounce if backend down)
   fetch('/api/me',{headers:auth()}).then(r=>r.json()).then(j=>{
     if(!j.ok){ localStorage.clear(); sessionStorage.clear(); location.href='/login'; }
   }).catch(()=>{});
 })();
-
 async function requestWakeLock(){ try{ if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); } }catch{} }
 async function sendLocation(coords){
   const now=Date.now();
@@ -65,7 +58,6 @@ function stopSharing(){
   $('locStatus').textContent='Location sharing is off.';
 }
 $('start').onclick=()=>{ if(watch!==null) stopSharing(); else startSharing(); };
-
 window.addEventListener('load',()=>{
   if(localStorage.getItem('zondi_sharing')==='1'){ startSharing(); msg('Auto-resumed live location after refresh.','warn'); }
 });
@@ -73,7 +65,6 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible' && localStorage.getItem('zondi_sharing')==='1' && watch===null){ startSharing(); }
   if(document.visibilityState==='visible'){ requestWakeLock(); }
 });
-
 $('sos').onclick=async()=>{if(!confirm('Send an emergency SOS to the patrol network?'))return;navigator.geolocation.getCurrentPosition(async p=>sendSOS(p.coords),async()=>sendSOS(null));async function sendSOS(c){let body=c?{lat:c.latitude,lng:c.longitude}:{};try{let r=await fetch('/api/sos',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify(body)});let d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'SOS failed');msg('SOS sent to the patrol network.','warn')}catch(e){msg(e.message,'err')}}};
 $('logout').onclick=async()=>{ stopSharing(); try{await fetch('/api/logout',{method:'POST',headers:auth()})}catch{}localStorage.clear();sessionStorage.clear();location.href='/login'};
 </script></body></html>
