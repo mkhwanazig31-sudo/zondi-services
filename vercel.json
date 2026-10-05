@@ -1,10 +1,11 @@
 {
   "version": 2,
-  "builds": [{ "src": "zondi.py", "use": "@vercel/python" }],
+  "builds": [
+    { "src": "main.py", "use": "@vercel/python" }
+  ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/zondi.py" },
-    { "src": "/radio/(.*)", "dest": "/zondi.py" },
-    { "src": "/assets/(.*)", "dest": "/zondi.py" },
-    { "src": "/(.*)", "dest": "/zondi.py" }
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    { "src": "/api/(.*)", "dest": "/main.py" },
+    { "src": "/(.*)", "dest": "/main.py" }
   ]
 }
