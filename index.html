@@ -12,7 +12,27 @@
 <a class="panel portal-card span4" href="/patrol"><div class="portal-icon">🚓</div><div class="portal-title">Patrol Portal</div><div class="portal-copy">Live client tracking, emergency events and PTT radio.</div></a>
 <a class="panel portal-card span4" href="/dev"><div class="portal-icon">🛠️</div><div class="portal-title">Developer Portal</div><div class="portal-copy">Approve patrol access and manage protected operations.</div></a>
 </section>
-<section class="panel panel-pad" style="margin-top:14px"><div class="row-between"><div><b>Fast start</b><div class="mini">No clutter. Pick where you need to go.</div></div><span class="badge live">● SYSTEM READY</span></div>
+<section class="panel panel-pad" style="margin-top:14px"><div class="row-between"><div><b>Fast start</b><div class="mini">No clutter. Pick where you need to go.</div></div><span class="badge live" id="sysBadge">● SYSTEM READY</span></div>
 <div class="quicknav" style="margin-top:12px"><a class="btn" href="/login">🔐 Login</a><a class="btn" href="/register">➕ Register</a><a class="btn" href="/forgot-password">🔑 Forgot password</a></div></section>
 <footer class="footer">ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span></footer>
-</main></body></html>
+</main>
+<script>
+// --- SMART AUTHORIZE FOR HOME ---
+(function(){
+  const getToken = ()=> localStorage.getItem('zondi_token') || sessionStorage.getItem('zondi_token') || localStorage.getItem('zondi_dev_token') || sessionStorage.getItem('zondi_dev_token');
+  const getUser = ()=> { try{ const raw = localStorage.getItem('zondi_user') || sessionStorage.getItem('zondi_user'); return raw?JSON.parse(raw):null; }catch{return null;} };
+  const token = getToken();
+  const user = getUser();
+  if(!token || !user) return; // stay on home if not logged in
+  // auto-redirect if already authorized
+  const role = (user.role||'client').toLowerCase();
+  const params = new URLSearchParams(location.search);
+  if(params.has('noredir')) return; // allow ?noredir=1 to stay on home
+  if(role==='dev'){ location.href='/dev'; }
+  else if(role==='patroller'){ location.href='/patrol'; }
+  else if(role==='client'){ location.href='/clients'; }
+  // optional: verify token alive
+  try{ fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>{ if(r.status===401){ localStorage.clear(); sessionStorage.clear(); } }); }catch{}
+})();
+</script>
+</body></html>
