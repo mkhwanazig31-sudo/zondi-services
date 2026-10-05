@@ -1,18 +1,63 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zondi — Radio</title><link rel="stylesheet" href="/assets/zondi-theme.css"><script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script><script src="/assets/zondi-radio.js"></script></head><body>
-<header class="topbar"><div class="topbar-inner"><a class="brand" href="/patrol"><span class="brand-mark"><img src="/assets/zondi-logo.png" alt=""></span><span><div class="brand-title">ZONDI</div><div class="brand-sub">SECURITY RADIO</div></span></a><a class="btn" href="/patrol">← Patrol</a></div></header>
-<main class="shell"><section class="panel panel-pad" style="max-width:720px;margin:18px auto"><div class="row-between"><div><b style="font-size:19px">Push-to-talk</b><div class="mini">One approved patroller transmits at a time.</div></div><span class="badge live" id="status">Connecting…</span></div>
-<div class="row" style="margin-top:16px"><label class="mini">Channel</label><select id="channel" style="background:#0b0b09;color:#fff;border:1px solid var(--line);padding:10px;border-radius:11px"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
-<button id="ptt" class="btn primary block" style="margin-top:18px;min-height:150px;border-radius:28px;font-size:24px">HOLD TO TALK</button>
-<div class="notice" style="margin-top:14px">Keep the button pressed while speaking. Release to open the channel for the next patroller.</div><div id="feed" class="list" style="margin-top:14px"></div></section>
-<footer class="footer">ZONDI RADIO · <span class="gold">Designed by G.V Mkhwanazi™</span></footer></main>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zondi — Radio Net</title>
+<link rel="stylesheet" href="/assets/zondi-theme.css">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+<a class="brand" href="/"><span class="brand-mark"><img src="/assets/zondi-logo.png"></span><span><div class="brand-title">ZONDI</div><div class="brand-sub">RADIO NET — PATROL ONLY</div></span></a>
+<div class="row"><a class="btn" href="/patrol">← Patrol</a><button class="btn" id="logout">Sign out</button></div>
+</div></header>
+<main class="shell">
+<div id="status" class="status hidden" style="margin-top:12px"></div>
+<section class="grid12" style="margin-top:12px">
+<div class="panel panel-pad span8" style="height:560px;display:flex;flex-direction:column">
+<div class="row-between"><b>📻 Encrypted Patrol Channel</b><span class="badge live">LIVE</span></div>
+<div id="radioFeed" style="flex:1;overflow:auto;margin-top:12px;display:flex;flex-direction:column;gap:8px"></div>
+<div class="row" style="margin-top:12px">
+<input id="radioInput" placeholder="Message to patrol net…" style="flex:1;padding:11px;border-radius:10px;background:#0f0f0f;border:1px solid #222;color:#fff">
+<button class="btn primary" id="sendRadio">Send</button>
+</div>
+</div>
+<div class="panel panel-pad span4">
+<b>Radio Rules</b>
+<div class="mini" style="margin-top:8px">• Patrol and dev only<br>• Client cannot see this<br>• Use for coordination<br>• SOS auto-cross posts here</div>
+<div class="notice" style="margin-top:12px">All messages encrypted in transit. Only authorized patrol roles can decrypt feed.</div>
+</div>
+</section>
+<footer class="footer">ZONDI PATROL SERVICE · <span class="gold">Designed by G.V Mkhwanazi™</span></footer>
+</main>
 <script>
-const token=sessionStorage.getItem('zondi_token'),u=JSON.parse(sessionStorage.getItem('zondi_user')||'null');
-if(!token||!u||u.role!=='patroller')location.href='/login';
+const getToken=()=>localStorage.getItem('zondi_token')||sessionStorage.getItem('zondi_token');
+const getUser=()=>{try{return JSON.parse(localStorage.getItem('zondi_user')||sessionStorage.getItem('zondi_user'))}catch{return null}};
 const $=id=>document.getElementById(id);
-const socket=io({auth:{token}});
-socket.on('connect',()=>{ $('status').textContent='Online'; socket.emit('join_channel',{channel:$('channel').value,auth:{token}}); });
-socket.on('disconnect',()=>$('status').textContent='Offline');
-window.initZondiRadio({socket,token,user:u,statusElId:'status',feedElId:'feed'});
-</script></body></html>
+function auth(){const t=getToken();return t?{Authorization:'Bearer '+t}:{}}
+(function authorize(){
+  const token=getToken();const user=getUser();
+  if(!token||!user){location.href='/login';return;}
+  if(user.role!=='patroller'&&user.role!=='dev'){location.href='/clients';return;}
+})();
+async function loadRadio(){
+  try{
+    const r=await fetch('/api/radio-feed',{headers:auth()});
+    const items=await r.json();
+    $('radioFeed').innerHTML=items.slice(-50).map(m=>`<div class="notice"><b>${m.from}</b> <span class="mini">${new Date(m.time*1000).toLocaleTimeString()}</span><div style="margin-top:4px">${m.text}</div></div>`).join('')||'<div class="mini">No radio traffic yet.</div>';
+    $('radioFeed').scrollTop=$('radioFeed').scrollHeight;
+  }catch{}
+}
+$('sendRadio').onclick=async()=>{
+  const text=$('radioInput').value.trim(); if(!text) return;
+  try{
+    const r=await fetch('/api/radio-send',{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const d=await r.json(); if(!r.ok||!d.ok) throw Error(d.error||'Send failed');
+    $('radioInput').value=''; loadRadio();
+  }catch(e){ const s=$('status'); s.hidden=false; s.textContent=e.message; s.className='status err'; }
+};
+$('radioInput').addEventListener('keydown',e=>{ if(e.key==='Enter') $('sendRadio').click(); });
+setInterval(loadRadio,2500); loadRadio();
+$('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',headers:auth()})}catch{}localStorage.clear();sessionStorage.clear();location.href='/login';};
+</script>
+</body>
+</html>
