@@ -9,7 +9,7 @@ import jwt
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-BASE_DIR = pathlib.Path(__file__).parent.resolve()
+BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 SECRET = os.getenv('JWT_SECRET', 'zondi-secret-2026-change-me')
 DEV_PASS = os.getenv('DEV_PORTAL_PASSWORD', os.getenv('DEV_PASSWORD', ''))
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -24,7 +24,8 @@ except:
     USE_PG = False
 
 def get_conn():
-    if not USE_PG: return None
+    if not USE_PG or not DATABASE_URL:
+        return None
     try:
         return psycopg2.connect(DATABASE_URL, sslmode='require')
     except Exception as e:
@@ -117,10 +118,13 @@ def save_file_db():
     except Exception as e:
         print("save_file_db fail", e)
 
-if not USE_PG: load_file_db()
-else:
-    try: init_db()
-    except: pass
+try:
+    if not USE_PG:
+        load_file_db()
+    else:
+        init_db()
+except Exception as e:
+    print("Startup DB load skipped:", e)
 
 def db_get_user(email):
     email = email.lower().strip()
@@ -462,6 +466,9 @@ def safe_send(f):
     fp = BASE_DIR / f
     if fp.exists() and fp.is_file(): return send_from_directory(str(BASE_DIR), f)
     return jsonify({'error': f'{f} not found.'}), 404
+
+@app.route('/api/health')
+def health(): return jsonify({'ok':True,'branch':'main-fixed','pg':USE_PG,'time':datetime.utcnow().isoformat()})
 
 @app.route('/')
 def root(): return safe_send('index.html')
