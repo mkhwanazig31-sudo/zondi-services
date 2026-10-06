@@ -1,5 +1,23 @@
-<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login - Zondi</title><style>body{background:#0f172a;color:#fff;font-family:system-ui;display:flex;justify-content:center;padding-top:80px}form{background:#1e293b;padding:30px;border-radius:12px;width:320px}input{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:0;background:#0f172a;color:#fff}button{width:100%;padding:12px;background:#22c55e;border:0;border-radius:8px;font-weight:bold;margin-top:10px}</style></head><body>
-<form id="f"><h2>Login</h2><input id="email" placeholder="Email" required><input id="password" type="password" placeholder="Password" required><button>Login</button><p id="msg"></p><a href="/register" style="color:#94a3b8">Register</a> | <a href="/forgot-password" style="color:#94a3b8">Forgot?</a></form>
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zondi Login</title>
+<style>body{background:#0a0a0a;color:#fff;font-family:system-ui;padding:16px}input{width:100%;padding:14px;border-radius:12px;border:1px solid #333;background:#111;color:#fff;margin-top:8px}.btn{width:100%;padding:14px;border-radius:999px;border:none;font-weight:700;margin-top:12px;cursor:pointer}.gold{background:#f5c518}.card{background:#151515;border:1px solid #222;border-radius:16px;padding:16px;margin-top:16px}</style></head>
+<body><div style="text-align:center"><div style="width:80px;height:80px;background:#111;border:1px solid #222;border-radius:16px;margin:0 auto;display:flex;align-items:center;justify-content:center">🛡️</div><h2 style="margin-top:12px">Welcome back</h2><p style="color:#777;font-size:12px">Secure access to the Zondi response network</p></div>
+<div style="margin-top:20px"><label style="font-size:12px;color:#aaa">Email</label><input id="email" placeholder="you@example.com">
+<label style="font-size:12px;color:#aaa;margin-top:12px;display:block">Password</label><input id="password" type="password" placeholder="Your password">
+<button class="btn gold" onclick="login()">Sign in</button>
+<div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-top:10px"><a href="/forgot-password" style="color:#888">Forgot password?</a><a href="/register" style="color:#888">Create account</a></div>
+<div class="card"><div style="display:flex;justify-content:space-between"><div><b style="font-size:12px">Developer access</b><div style="font-size:10px;color:#666">Private administration only</div></div><button onclick="document.getElementById('devBox').style.display='block'" style="background:#222;color:#fff;border:1px solid #333;border-radius:999px;padding:8px 14px">Open</button></div>
+<div id="devBox" style="display:none;margin-top:12px"><input id="devpass" type="password" placeholder="Enter private developer password"><button class="btn" style="background:#22c55e;color:#000" onclick="devLogin()">Enter Developer Portal</button></div>
+</div></div>
 <script>
-f.onsubmit=async(e)=>{e.preventDefault();msg.textContent='...';let r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email.value,password:password.value})});let j=await r.json();if(!j.ok){msg.textContent=j.error;return;}localStorage.setItem('zondi_token',j.token);localStorage.setItem('zondi_user',JSON.stringify(j.user));if(j.user.role==='dev')location='/dev';else if(j.user.role==='patroller')location='/patrol';else location='/clients';}
+async function login(){
+ const email=document.getElementById('email').value.trim(); const password=document.getElementById('password').value;
+ const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})}); const j=await r.json();
+ if(!j.ok) return alert(j.error); localStorage.setItem('zondi_token', j.token); localStorage.setItem('zondi_user', JSON.stringify(j.user));
+ if(j.user.role==='patroller') location.href='/patrol'; else location.href='/clients';
+}
+async function devLogin(){
+ const password=document.getElementById('devpass').value;
+ const r=await fetch('/api/dev-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})}); const j=await r.json();
+ if(!j.ok) return alert(j.error); localStorage.setItem('zondi_token', j.token); location.href='/dev';
+}
 </script></body></html>
