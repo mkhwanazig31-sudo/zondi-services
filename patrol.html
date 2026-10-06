@@ -1,0 +1,6 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Patrol - Zondi</title><style>body{background:#0f172a;color:#fff;font-family:system-ui;padding:15px}#list{background:#1e293b;padding:15px;border-radius:10px;min-height:200px}</style></head><body><h2>Patrol Live</h2><a href="/radio">Go to Radio</a> | <a href="/clients">Client View</a><div id="list">Loading locations...</div>
+<script>
+let t=localStorage.getItem('zondi_token');async function load(){let r=await fetch('/api/location/live',{headers:{Authorization:'Bearer '+t}});let j=await r.json();if(!j.ok){list.innerHTML=j.error;return;}list.innerHTML=j.locations.map(l=>`<div>${l.name||l.email} - ${l.lat},${l.lng} - ${new Date(l.updated_at).toLocaleTimeString()}</div>`).join('')||'No active';}
+setInterval(load,4000);load();
+navigator.geolocation.watchPosition(p=>{fetch('/api/location/update',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})})});
+</script></body></html>
