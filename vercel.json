@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "zondi.py": {
-      "runtime": "python3.11"
-    }
-  },
   "rewrites": [
     { "source": "/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/(.*)", "destination": "/zondi.py" }
