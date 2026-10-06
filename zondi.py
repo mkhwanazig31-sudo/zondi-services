@@ -14,7 +14,6 @@ SECRET = os.getenv('JWT_SECRET', 'zondi-secret-2026-change-me')
 DEV_PASS = os.getenv('DEV_PORTAL_PASSWORD', os.getenv('DEV_PASSWORD', ''))
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# --- DB HELPERS ---
 USE_PG = False
 try:
     import psycopg2
@@ -62,6 +61,23 @@ def init_db():
             lng DOUBLE PRECISION,
             time TIMESTAMP DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS zondi_radio (
+            id SERIAL PRIMARY KEY,
+            email TEXT,
+            name TEXT,
+            file_name TEXT,
+            url TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS zondi_incidents (
+            id SERIAL PRIMARY KEY,
+            email TEXT,
+            type TEXT,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            note TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
         """)
         conn.commit()
         cur.close()
@@ -71,16 +87,18 @@ def init_db():
         try: conn.close()
         except: pass
 
-# --- FILE FALLBACK - ALWAYS /tmp on Vercel ---
 TMP_DIR = pathlib.Path("/tmp")
 DB_FILE = TMP_DIR / "zondi_db.json"
 DB_FILE_FALLBACK = BASE_DIR / "zondi_db.json"
-
 USERS = {'client@test.com': {'email':'client@test.com','name':'Test Client','role':'client','password':generate_password_hash('12345678'), 'status':'active'}}
 PATROLLERS = []
 LOCATIONS = {}
 SOS_EVENTS = []
 RESET_REQUESTS = []
+RADIO_DIR = pathlib.Path("/tmp/radio")
+RADIO_DIR.mkdir(parents=True, exist_ok=True)
+RADIO_LOG = []
+RADIO_PRESENCE = {}
 
 def load_file_db():
     for p in [DB_FILE, DB_FILE_FALLBACK]:
@@ -92,7 +110,6 @@ def load_file_db():
                 PATROLLERS = data.get("PATROLLERS", PATROLLERS)
                 break
             except: pass
-
 def save_file_db():
     try:
         TMP_DIR.mkdir(exist_ok=True)
@@ -100,8 +117,7 @@ def save_file_db():
     except Exception as e:
         print("save_file_db fail", e)
 
-if not USE_PG:
-    load_file_db()
+if not USE_PG: load_file_db()
 else:
     try: init_db()
     except: pass
@@ -116,9 +132,7 @@ def db_get_user(email):
         row = cur.fetchone()
         cur.close(); conn.close()
         return row
-    except Exception as e:
-        print("db_get_user error", e)
-        return None
+    except: return None
 
 def db_save_user(u):
     conn = get_conn()
@@ -132,9 +146,7 @@ def db_save_user(u):
         """, (u['email'].lower(), u.get('name',''), u.get('role','client'), u.get('password',''), u.get('status','active'), u.get('phone','')))
         conn.commit(); cur.close(); conn.close()
         return True
-    except Exception as e:
-        print("db_save_user error", e)
-        return False
+    except: return False
 
 def make_token(user_dict):
     payload = {'email': user_dict['email'], 'name': user_dict.get('name',''), 'role': user_dict.get('role','client'), 'exp': datetime.utcnow() + timedelta(days=7)}
@@ -164,6 +176,12 @@ def dev_auth_required(f):
         request.user_data = user
         return f(*args, **kwargs)
     return wrapper
+
+def cleanup_presence():
+    now = datetime.utcnow()
+    for e in [e for e,v in list(RADIO_PRESENCE.items()) if (now - v['last']).total_seconds() > 35]:
+        try: del RADIO_PRESENCE[e]
+        except: pass
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
@@ -228,43 +246,145 @@ def api_logout(): return jsonify({'ok':True})
 @auth_required
 def loc_update():
     data = request.get_json(force=True, silent=True) or {}
-    LOCATIONS[request.user_data['email'].lower()] = {'email':request.user_data['email'],'name':request.user_data.get('name',''),'lat':data.get('lat'),'lng':data.get('lng'),'updated_at':datetime.utcnow().isoformat()}
+    email = request.user_data['email'].lower()
+    LOCATIONS[email] = {'email':email,'name':request.user_data.get('name',''),'lat':data.get('lat'),'lng':data.get('lng'),'updated_at':datetime.utcnow().isoformat()}
+    if USE_PG:
+        conn=get_conn()
+        if conn:
+            try:
+                cur=conn.cursor()
+                cur.execute("""
+                    INSERT INTO zondi_locations (email,name,lat,lng,updated_at)
+                    VALUES (%s,%s,%s,%s,NOW())
+                    ON CONFLICT (email) DO UPDATE SET lat=EXCLUDED.lat, lng=EXCLUDED.lng, name=EXCLUDED.name, updated_at=NOW()
+                """,(email, request.user_data.get('name',''), data.get('lat'), data.get('lng')))
+                conn.commit(); cur.close(); conn.close()
+            except: pass
     return jsonify({'ok':True})
 
 @app.route('/api/location/live')
 @auth_required
 def loc_live():
-    if request.user_data.get('role') not in ['patroller','dev']: return jsonify({'ok':False,'error':'Patrol only'}), 403
+    if request.user_data.get('role') not in ['patroller','dev']:
+        return jsonify({'ok':False,'error':'Patrol only'}), 403
+    if USE_PG:
+        conn=get_conn()
+        if conn:
+            try:
+                cur=conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cur.execute("SELECT * FROM zondi_locations WHERE updated_at > NOW() - INTERVAL '5 minutes'")
+                rows=cur.fetchall(); conn.close()
+                return jsonify({'ok':True,'locations': rows})
+            except: pass
     return jsonify({'ok':True,'locations': list(LOCATIONS.values())})
 
 @app.route('/api/sos', methods=['POST'])
 @auth_required
-def api_sos(): return jsonify({'ok':True})
+def api_sos():
+    data = request.get_json(force=True, silent=True) or {}
+    item = {'email':request.user_data['email'].lower(),'name':request.user_data.get('name',''),'lat':data.get('lat'),'lng':data.get('lng'),'time':datetime.utcnow().isoformat()}
+    SOS_EVENTS.append(item)
+    if USE_PG:
+        conn=get_conn()
+        if conn:
+            try:
+                cur=conn.cursor()
+                cur.execute("INSERT INTO zondi_sos (email,name,lat,lng,time) VALUES (%s,%s,%s,%s,NOW())",(item['email'],item['name'],item['lat'],item['lng']))
+                conn.commit(); conn.close()
+            except: pass
+    return jsonify({'ok':True})
+
 @app.route('/api/sos-feed')
 @auth_required
-def sos_feed(): return jsonify([])
+def sos_feed():
+    if USE_PG:
+        conn=get_conn()
+        if conn:
+            try:
+                cur=conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cur.execute("SELECT * FROM zondi_sos ORDER BY time DESC LIMIT 50")
+                rows=cur.fetchall(); conn.close(); return jsonify(rows)
+            except: pass
+    return jsonify(SOS_EVENTS[-50:])
+
 @app.route('/api/patrol-scan', methods=['POST'])
 @auth_required
-def patrol_scan(): return jsonify({'ok':True})
+def patrol_scan():
+    data = request.get_json(force=True, silent=True) or {}
+    if USE_PG:
+        conn=get_conn()
+        if conn:
+            try:
+                cur=conn.cursor()
+                cur.execute("INSERT INTO zondi_incidents (email,type,lat,lng,note) VALUES (%s,%s,%s,%s,%s)",(request.user_data['email'].lower(), data.get('type','scan'), data.get('lat'), data.get('lng'), data.get('note','')))
+                conn.commit(); conn.close()
+            except: pass
+    return jsonify({'ok':True})
+
 @app.route('/api/incident', methods=['POST'])
 @auth_required
-def incident(): return jsonify({'ok':True})
+def incident(): return patrol_scan()
+
 @app.route('/api/patroller-ping', methods=['POST'])
 @auth_required
 def patroller_ping(): return loc_update()
+
+@app.route('/api/radio/presence', methods=['POST'])
+@auth_required
+def radio_presence():
+    data = request.get_json(silent=True) or {}
+    email = request.user_data['email'].lower()
+    RADIO_PRESENCE[email] = {'email':email,'name':request.user_data.get('name','Patroller'),'role':request.user_data.get('role','patroller'),'last':datetime.utcnow(),'lat':data.get('lat'),'lng':data.get('lng'),'tx':data.get('tx', False)}
+    cleanup_presence()
+    active = [{'email':v['email'],'name':v['name'],'role':v['role'],'active':True,'tx':v['tx'],'ago':int((datetime.utcnow()-v['last']).total_seconds())} for v in RADIO_PRESENCE.values() if v['email']!=email]
+    return jsonify({'ok':True,'connected':len(RADIO_PRESENCE),'radios':active})
+
+@app.route('/api/radio/feed')
+@app.route('/api/radio-feed')
+@auth_required
+def radio_feed():
+    cleanup_presence()
+    return jsonify({'ok':True,'items':RADIO_LOG[-20:],'presence':list(RADIO_PRESENCE.values())})
+
+@app.route('/api/radio/push', methods=['POST'])
+@app.route('/api/radio-send', methods=['POST'])
+@auth_required
+def radio_push():
+    f = request.files.get('audio')
+    if not f: return jsonify({'ok':False,'error':'No audio'}),400
+    safe_name = request.user_data['email'].split('@')[0].replace('.','_').replace('/','_')
+    fname = f"radio_{int(datetime.utcnow().timestamp())}_{safe_name}.webm"
+    path = RADIO_DIR / fname
+    try: f.save(str(path))
+    except: pass
+    item = {'name':request.user_data.get('name','Patroller'),'email':request.user_data['email'].lower(),'time':datetime.utcnow().isoformat(),'file':fname,'url':f'/radio/{fname}'}
+    RADIO_LOG.append(item)
+    if USE_PG:
+        conn=get_conn()
+        if conn:
+            try:
+                cur=conn.cursor()
+                cur.execute("INSERT INTO zondi_radio (email,name,file_name,url) VALUES (%s,%s,%s,%s)",(item['email'],item['name'],fname,item['url']))
+                conn.commit(); conn.close()
+            except: pass
+    if len(RADIO_LOG)>50: RADIO_LOG.pop(0)
+    return jsonify({'ok':True,'item':item})
+
+@app.route('/radio/<path:filename>')
+def serve_radio(filename): return send_from_directory(str(RADIO_DIR), filename)
 
 @app.route('/api/admin/pending')
 @dev_auth_required
 def admin_pending():
     if USE_PG:
         conn=get_conn()
-        if not conn: return jsonify({'ok':True,'pending':[],'all_patrollers':[]})
-        try:
-            cur=conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("SELECT * FROM zondi_users WHERE role='patroller' AND status='pending'"); pending=cur.fetchall()
-            cur.execute("SELECT * FROM zondi_users WHERE role='patroller'"); all_p=cur.fetchall()
-            conn.close(); return jsonify({'ok':True,'pending':pending,'all_patrollers':all_p})
-        except: return jsonify({'ok':True,'pending':[],'all_patrollers':[]})
+        if conn:
+            try:
+                cur=conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cur.execute("SELECT * FROM zondi_users WHERE role='patroller' AND status='pending'"); pending=cur.fetchall()
+                cur.execute("SELECT * FROM zondi_users WHERE role='patroller'"); all_p=cur.fetchall()
+                conn.close(); return jsonify({'ok':True,'pending':pending,'all_patrollers':all_p})
+            except: return jsonify({'ok':True,'pending':[],'all_patrollers':[]})
     return jsonify({'ok':True,'pending':[p for p in PATROLLERS if p.get('status')=='pending'],'all_patrollers':PATROLLERS})
 
 @app.route('/api/admin/approve', methods=['POST'])
@@ -338,58 +458,9 @@ def forgot_api():
     if email: RESET_REQUESTS.append({'email':email,'requested_at':datetime.utcnow().isoformat(),'status':'pending'})
     return jsonify({'ok':True,'message':'If that email exists, a reset request was created.'})
 
-# --- RADIO NET - 100% VERCEL SAFE ---
-RADIO_DIR = pathlib.Path("/tmp/radio")
-RADIO_DIR.mkdir(parents=True, exist_ok=True)
-RADIO_LOG = []
-RADIO_PRESENCE = {}
-
-def cleanup_presence():
-    now = datetime.utcnow()
-    for e in [e for e,v in list(RADIO_PRESENCE.items()) if (now - v['last']).total_seconds() > 35]:
-        try: del RADIO_PRESENCE[e]
-        except: pass
-
-@app.route('/api/radio/presence', methods=['POST'])
-@auth_required
-def radio_presence():
-    data = request.get_json(silent=True) or {}
-    email = request.user_data['email'].lower()
-    RADIO_PRESENCE[email] = {'email':email,'name':request.user_data.get('name','Patroller'),'role':request.user_data.get('role','patroller'),'last':datetime.utcnow(),'lat':data.get('lat'),'lng':data.get('lng'),'tx':data.get('tx', False)}
-    cleanup_presence()
-    active = [{'email':v['email'],'name':v['name'],'role':v['role'],'active':True,'tx':v['tx'],'ago':int((datetime.utcnow()-v['last']).total_seconds())} for v in RADIO_PRESENCE.values() if v['email']!=email]
-    return jsonify({'ok':True,'connected':len(RADIO_PRESENCE),'radios':active})
-
-@app.route('/api/radio/feed')
-@auth_required
-def radio_feed():
-    cleanup_presence()
-    return jsonify({'ok':True,'items':RADIO_LOG[-20:],'presence':[{'email':v['email'],'name':v['name'],'tx':v['tx']} for v in RADIO_PRESENCE.values()]})
-
-@app.route('/api/radio/push', methods=['POST'])
-@auth_required
-def radio_push():
-    f = request.files.get('audio')
-    if not f: return jsonify({'ok':False,'error':'No audio'}),400
-    safe_name = request.user_data['email'].split('@')[0].replace('.','_').replace('/','_')
-    fname = f"radio_{int(datetime.utcnow().timestamp())}_{safe_name}.webm"
-    path = RADIO_DIR / fname
-    try: f.save(str(path))
-    except Exception as e: print("save radio fail", e)
-    item = {'name':request.user_data.get('name','Patroller'),'email':request.user_data['email'].lower(),'time':datetime.utcnow().isoformat(),'file':fname,'url':f'/radio/{fname}'}
-    RADIO_LOG.append(item)
-    if len(RADIO_LOG)>50: RADIO_LOG.pop(0)
-    return jsonify({'ok':True,'item':item,'sent_to':max(0,len(RADIO_PRESENCE)-1)})
-
-@app.route('/radio/<path:filename>')
-def serve_radio(filename): return send_from_directory(str(RADIO_DIR), filename)
-
 def safe_send(f):
     fp = BASE_DIR / f
     if fp.exists() and fp.is_file(): return send_from_directory(str(BASE_DIR), f)
-    # try /tmp fallback for vercel
-    fp2 = TMP_DIR / f
-    if fp2.exists(): return send_from_directory(str(TMP_DIR), f)
     return jsonify({'error': f'{f} not found.'}), 404
 
 @app.route('/')
@@ -400,8 +471,13 @@ def login_route(): return safe_send('login.html')
 def clients_route(): return safe_send('clients.html')
 @app.route('/patrol')
 def patrol_route(): return safe_send('patrol.html')
+@app.route('/radio')
+def radio_route(): return safe_send('radio.html')
 @app.route('/dev')
-def dev_route(): return safe_send('dev.html') if (BASE_DIR/'dev.html').exists() else safe_send('dev_portal.html')
+def dev_route():
+    for name in ['dev.portal.html','dev_portal.html','dev.html']:
+        if (BASE_DIR / name).exists(): return safe_send(name)
+    return safe_send('dev.portal.html')
 @app.route('/register')
 def register_route(): return safe_send('register.html')
 @app.route('/forgot-password')
