@@ -1,6 +1,27 @@
-<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clients - Zondi</title><style>body{background:#0f172a;color:#fff;font-family:system-ui;padding:20px}button{padding:12px 18px;border-radius:8px;border:0;background:#ef4444;color:#fff;font-weight:bold}#map{height:60vh;background:#1e293b;border-radius:12px;margin-top:15px;display:flex;align-items:center;justify-content:center}</style></head><body><h2>Client Dashboard</h2><p id="u"></p><button id="sos">🚨 SEND SOS</button><div id="map">Map / Location tracking active</div>
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Client</title>
+<style>body{background:#0a0a0a;color:#fff;font-family:system-ui;padding:16px}.top{display:flex;justify-content:space-between;align-items:center}.btn{padding:12px 16px;border-radius:999px;border:none;font-weight:700;cursor:pointer}.green{background:#22c55e}.red{background:#ef4444;color:#fff}.card{background:#151515;border:1px solid #222;border-radius:16px;padding:16px;margin-top:12px}</style></head>
+<body><div class="top"><b>ZONDI PORTAL</b><button class="btn" style="background:#111;border:1px solid #333;color:#fff" onclick="localStorage.clear();location.href='/login'">Sign out</button></div>
+<div id="msg" style="margin-top:12px"></div>
+<div class="card"><div style="font-size:10px;color:#22c55e">● CONNECTED</div><h2>Welcome, <span id="name">Client</span></h2><p style="color:#777;font-size:12px">Your Zondi account is ready. Start location sharing only when you need patrol visibility.</p><div style="display:flex;gap:8px;margin-top:12px"><button class="btn green" id="locBtn" onclick="toggleLoc()">Start live location</button><button class="btn red" onclick="sendSOS()">🚨 Send SOS</button></div></div>
+<div class="card"><b style="font-size:12px">Location status</b><div id="locStatus" style="color:#888;font-size:12px;margin-top:4px">Idle - start sharing to become visible</div><div style="margin-top:8px;font-size:11px;color:#aaa;border-left:2px solid #f5c518;padding-left:8px">Your live location is visible to authorized patrol users while sharing is active.</div></div>
 <script>
-let t=localStorage.getItem('zondi_token');if(!t)location='/login';fetch('/api/me',{headers:{Authorization:'Bearer '+t}}).then(r=>r.json()).then(j=>{if(!j.ok)location='/login';u.textContent=j.user.name+' - '+j.user.role});
-navigator.geolocation.watchPosition(p=>{fetch('/api/location/update',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+localStorage.getItem('zondi_token')},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})})});
-sos.onclick=()=>{navigator.geolocation.getCurrentPosition(p=>{fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})}).then(()=>alert('SOS Sent!'));})};
+const token=localStorage.getItem('zondi_token'); if(!token) location.href='/login';
+let watch=null, sharing=false;
+function show(m,c){document.getElementById('msg').innerHTML=`<div style="background:${c};padding:10px;border-radius:10px;font-size:12px">${m}</div>`}
+async function toggleLoc(){
+ if(sharing){ if(watch) navigator.geolocation.clearWatch(watch); sharing=false; document.getElementById('locBtn').innerText='Start live location'; document.getElementById('locStatus').innerText='Sharing stopped'; return; }
+ if(!navigator.geolocation) return show('Location not supported','red');
+ sharing=true; document.getElementById('locBtn').innerText='Stop live location'; document.getElementById('locStatus').innerText='Requesting location...';
+ watch=navigator.geolocation.watchPosition(async p=>{
+   const {latitude:lat, longitude:lng}=p.coords; document.getElementById('locStatus').innerText=`Live: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+   await fetch('/api/location/update',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({lat,lng})});
+ }, e=>{ show('Location permission was denied or unavailable: '+e.message,'#7f1d1d'); sharing=false; },{enableHighAccuracy:true});
+}
+async function sendSOS(){
+ if(!navigator.geolocation) return;
+ navigator.geolocation.getCurrentPosition(async p=>{
+  await fetch('/api/sos',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})}); show('SOS sent to patrol!','green');
+ });
+}
+fetch('/api/me',{headers:{'Authorization':'Bearer '+token}}).then(r=>r.json()).then(j=>{ if(j.user) document.getElementById('name').innerText=j.user.name; });
 </script></body></html>
